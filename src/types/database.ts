@@ -48,5 +48,6 @@ export interface UserSettings {
   email_address: string | null;
   email_provider: 'gmail' | 'outlook' | 'other' | null;
   onboarding_done: boolean;
+  base_currency: string;
   created_at: string;
 }

@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Plus, LogOut } from 'lucide-react';
+import { SUPPORTED_CURRENCIES, currencySymbol } from '@/lib/currency';
 
 const Settings = () => {
   const { user, signOut } = useAuth();
@@ -27,6 +29,8 @@ const Settings = () => {
 
   // Category form
   const [newCategory, setNewCategory] = useState('');
+  // Currency
+  const [baseCurrency, setBaseCurrency] = useState('EUR');
 
   useEffect(() => {
     if (!user) return;
@@ -38,6 +42,7 @@ const Settings = () => {
         setSettings(s.data);
         setEmailAddress(s.data.email_address ?? '');
         setEmailProvider(s.data.email_provider ?? 'gmail');
+        setBaseCurrency(s.data.base_currency ?? 'EUR');
       }
       setCategories(c.data ?? []);
       setLoading(false);
@@ -98,7 +103,28 @@ const Settings = () => {
           </CardContent>
         </Card>
 
-        {/* Project management */}
+        {/* Currency */}
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Base Currency</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">All dashboard totals and KPIs will display in this currency.</p>
+            <Select value={baseCurrency} onValueChange={async (v) => {
+              setBaseCurrency(v);
+              if (!user) return;
+              const { error } = await supabase.from('user_settings').upsert({ id: user.id, base_currency: v });
+              if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
+              toast({ title: 'Currency updated' });
+            }}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {SUPPORTED_CURRENCIES.map((c) => (
+                  <SelectItem key={c} value={c}>{currencySymbol(c).trim()} {c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader><CardTitle className="text-sm">Project Management</CardTitle></CardHeader>
           <CardContent>

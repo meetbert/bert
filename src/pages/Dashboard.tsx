@@ -12,6 +12,8 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { FileText, DollarSign, FolderOpen, AlertCircle, Clock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { useUserSettings } from '@/hooks/useUserSettings';
+import { formatCurrency, currencySymbol } from '@/lib/currency';
 
 const CHART_COLORS = ['hsl(0,100%,65%)', 'hsl(0,0%,20%)', 'hsl(0,0%,45%)', 'hsl(0,0%,70%)', 'hsl(0,0%,85%)', 'hsl(38,92%,50%)', 'hsl(142,71%,45%)'];
 
@@ -20,6 +22,7 @@ const Dashboard = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const { baseCurrency } = useUserSettings();
 
   useEffect(() => {
     fetchData();
@@ -37,25 +40,23 @@ const Dashboard = () => {
     setLoading(false);
   };
 
+  const sym = currencySymbol(baseCurrency);
   const totalSpend = invoices.reduce((s, i) => s + (i.total ?? 0), 0);
   const activeProjects = projects.filter((p) => p.status === 'Active');
   const unpaid = invoices.filter((i) => i.payment_status === 'unpaid');
   const overdue = invoices.filter((i) => i.payment_status === 'overdue');
   const unassigned = invoices.filter((i) => !i.project_id);
 
-  // Spend by category
   const categorySpend = categories.map((c) => ({
     name: c.name,
     value: invoices.filter((i) => i.category_id === c.id).reduce((s, i) => s + i.total, 0),
   })).filter((c) => c.value > 0);
 
-  // Spend by project
   const projectSpend = projects.map((p) => ({
     name: p.name,
     value: invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + i.total, 0),
   })).filter((p) => p.value > 0);
 
-  // Monthly spend
   const monthlyMap: Record<string, number> = {};
   invoices.forEach((i) => {
     const month = i.invoice_date?.slice(0, 7) ?? 'Unknown';
@@ -68,7 +69,6 @@ const Dashboard = () => {
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
-      // Also upsert vendor mapping
       const inv = invoices.find((i) => i.id === invoiceId);
       if (inv) {
         await supabase.from('vendor_mappings').upsert({ vendor_name: inv.vendor_name, project_id: projectId }, { onConflict: 'vendor_name' });
@@ -91,6 +91,8 @@ const Dashboard = () => {
     );
   }
 
+  const hasBudget = (p: Project) => p.budget != null && p.budget > 0;
+
   return (
     <div className="min-h-screen">
       <Navbar />
@@ -100,7 +102,7 @@ const Dashboard = () => {
         {/* KPI Row */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <KpiCard title="Total Invoices" value={invoices.length} icon={<FileText className="h-5 w-5 text-primary" />} />
-          <KpiCard title="Total Spend" value={`€${totalSpend.toLocaleString('en', { minimumFractionDigits: 2 })}`} icon={<DollarSign className="h-5 w-5 text-primary" />} />
+          <KpiCard title="Total Spend" value={formatCurrency(totalSpend, baseCurrency)} icon={<DollarSign className="h-5 w-5 text-primary" />} />
           <KpiCard title="Active Projects" value={activeProjects.length} icon={<FolderOpen className="h-5 w-5 text-primary" />} />
           <KpiCard title="Unpaid" value={unpaid.length} icon={<Clock className="h-5 w-5 text-muted-foreground" />} />
           <KpiCard title="Overdue" value={overdue.length} icon={<AlertCircle className="h-5 w-5 text-primary" />} />
@@ -137,7 +139,7 @@ const Dashboard = () => {
                       <tr key={inv.id} className="border-b last:border-0 hover:bg-secondary/50">
                         <td className="py-2 pr-4 font-medium">{inv.vendor_name}</td>
                         <td className="py-2 pr-4">{inv.invoice_date}</td>
-                        <td className="py-2 pr-4">{inv.currency}{inv.total?.toLocaleString()}</td>
+                        <td className="py-2 pr-4">{formatCurrency(inv.total ?? 0, baseCurrency)}</td>
                         <td className="py-2 pr-4">{(inv as any).category?.name ?? '—'}</td>
                         <td className="py-2">
                           <Select onValueChange={(v) => assignProject(inv.id, v)}>
@@ -167,7 +169,7 @@ const Dashboard = () => {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {projects.map((p) => {
                 const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + i.total, 0);
-                const pct = p.budget > 0 ? Math.min((spent / p.budget) * 100, 100) : 0;
+                const pct = hasBudget(p) ? Math.min((spent / p.budget) * 100, 100) : 0;
                 return (
                   <Link key={p.id} to={`/projects/${p.id}`}>
                     <Card className="cursor-pointer transition-shadow hover:shadow-md">
@@ -176,11 +178,23 @@ const Dashboard = () => {
                           <h3 className="font-semibold">{p.name}</h3>
                           <StatusBadge status={p.status} />
                         </div>
-                        <Progress value={pct} className="mt-3" />
-                        <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                          <span>€{spent.toLocaleString()}</span>
-                          <span>of €{p.budget.toLocaleString()}</span>
-                        </div>
+                        {hasBudget(p) ? (
+                          <>
+                            <Progress value={pct} className="mt-3" />
+                            <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                              <span>{formatCurrency(spent, baseCurrency)}</span>
+                              <span>of {formatCurrency(p.budget, baseCurrency)}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="mt-3 h-2 rounded-full border border-dashed border-muted-foreground/30" />
+                            <div className="mt-2 flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">{formatCurrency(spent, baseCurrency)} spent</span>
+                              <span className="text-primary hover:underline">Set budget →</span>
+                            </div>
+                          </>
+                        )}
                       </CardContent>
                     </Card>
                   </Link>
@@ -201,7 +215,7 @@ const Dashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
+                    <Tooltip formatter={(v: number) => formatCurrency(v, baseCurrency)} />
                     <Bar dataKey="value" fill="hsl(0,100%,65%)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -218,7 +232,7 @@ const Dashboard = () => {
                     <Pie data={projectSpend} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} strokeWidth={2}>
                       {projectSpend.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip formatter={(v: number) => formatCurrency(v, baseCurrency)} />
                   </PieChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -234,7 +248,7 @@ const Dashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
+                    <Tooltip formatter={(v: number) => formatCurrency(v, baseCurrency)} />
                     <Line type="monotone" dataKey="value" stroke="hsl(0,100%,65%)" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -254,7 +268,7 @@ const Dashboard = () => {
                     {overdue.map((inv) => (
                       <Link key={inv.id} to={`/invoices/${inv.id}`} className="flex items-center justify-between rounded-lg border border-primary/20 p-3 text-sm hover:bg-secondary/50">
                         <span className="font-medium">{inv.vendor_name}</span>
-                        <span className="text-primary">{inv.currency}{inv.total.toLocaleString()}</span>
+                        <span className="text-primary">{formatCurrency(inv.total, baseCurrency)}</span>
                       </Link>
                     ))}
                   </div>

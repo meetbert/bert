@@ -13,10 +13,13 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Plus, ChevronDown, ChevronUp, Trash2, Pencil } from 'lucide-react';
+import { useUserSettings } from '@/hooks/useUserSettings';
+import { formatCurrency } from '@/lib/currency';
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [invoices, setInvoices] = useState<{ id: string; total: number; project_id: string | null }[]>([]);
+  const { baseCurrency } = useUserSettings();
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
@@ -115,7 +118,8 @@ const Projects = () => {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((p) => {
               const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + (i.total ?? 0), 0);
-              const pct = p.budget > 0 ? Math.min((spent / p.budget) * 100, 100) : 0;
+              const hasBudget = p.budget != null && p.budget > 0;
+              const pct = hasBudget ? Math.min((spent / p.budget) * 100, 100) : 0;
               return (
                 <Card key={p.id} className="group relative">
                   <Link to={`/projects/${p.id}`}>
@@ -124,11 +128,28 @@ const Projects = () => {
                         <h3 className="font-semibold">{p.name}</h3>
                         <StatusBadge status={p.status} />
                       </div>
-                      <Progress value={pct} className="mt-3" />
-                      <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                        <span>€{spent.toLocaleString()}</span>
-                        <span>of €{p.budget.toLocaleString()}</span>
-                      </div>
+                      {hasBudget ? (
+                        <>
+                          <Progress value={pct} className="mt-3" />
+                          <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                            <span>{formatCurrency(spent, baseCurrency)}</span>
+                            <span>of {formatCurrency(p.budget, baseCurrency)}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="mt-3 h-2 rounded-full border border-dashed border-muted-foreground/30" />
+                          <div className="mt-2 flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">{formatCurrency(spent, baseCurrency)} spent</span>
+                            <button
+                              onClick={(e) => { e.preventDefault(); startEdit(p); }}
+                              className="text-primary hover:underline"
+                            >
+                              Set budget →
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </CardContent>
                   </Link>
                   <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">

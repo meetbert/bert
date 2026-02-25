@@ -8,10 +8,16 @@ const pickEnv = (...keys: string[]) => keys.map((key) => env[key]?.trim()).find(
 const supabaseUrl = pickEnv('VITE_SUPABASE_URL', 'SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL');
 const supabaseAnonKey = pickEnv('VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY', 'NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
-const isValidSupabaseUrl = /^https:\/\/[a-zA-Z0-9-]+\.supabase\.co$/i.test(supabaseUrl);
-const isValidAnonKey = supabaseAnonKey.length > 20;
+const isLikelyUrl = (() => {
+  try {
+    const parsed = new URL(supabaseUrl);
+    return parsed.protocol === 'https:' && Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
+})();
 
-const hasSupabaseConfig = Boolean(isValidSupabaseUrl && isValidAnonKey);
+const hasSupabaseConfig = Boolean(isLikelyUrl && supabaseAnonKey);
 
 if (!hasSupabaseConfig) {
   console.warn('Supabase is not configured correctly. Add valid URL/key in project secrets.');

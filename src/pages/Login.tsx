@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
+import { hasSupabaseConfig, supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,8 +35,22 @@ const Login = () => {
     }
   }, [user, navigate]);
 
+  const showConfigError = () => {
+    toast({
+      title: 'Supabase not configured',
+      description: 'Please update VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in project secrets.',
+      variant: 'destructive',
+    });
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!hasSupabaseConfig) {
+      showConfigError();
+      return;
+    }
+
     setLoading(true);
     try {
       if (isSignUp) {
@@ -55,6 +69,11 @@ const Login = () => {
   };
 
   const handleGoogleLogin = async () => {
+    if (!hasSupabaseConfig) {
+      showConfigError();
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + '/dashboard' } });
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
   };
@@ -67,6 +86,11 @@ const Login = () => {
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold text-primary">Bert.</CardTitle>
             <CardDescription>{isSignUp ? 'Create your account' : 'Sign in to your account'}</CardDescription>
+            {!hasSupabaseConfig && (
+              <p className="mt-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs text-primary">
+                Supabase keys are missing/invalid in project secrets.
+              </p>
+            )}
           </CardHeader>
           <CardContent>
             <form onSubmit={handleAuth} className="space-y-4">

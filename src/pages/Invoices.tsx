@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
 import { Navbar } from '@/components/Navbar';
-import { StatusBadge } from '@/components/StatusBadge';
+import { StatusDropdown } from '@/components/StatusDropdown';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import { Search, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useUserSettings } from '@/hooks/useUserSettings';
+import { formatCurrency } from '@/lib/currency';
 
 const PAGE_SIZE = 25;
 
@@ -23,6 +25,7 @@ const Invoices = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(0);
+  const { baseCurrency } = useUserSettings();
 
   useEffect(() => {
     Promise.all([
@@ -57,11 +60,11 @@ const Invoices = () => {
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
 
-  const toggleStatus = async (inv: Invoice) => {
-    const newStatus = inv.payment_status === 'paid' ? 'unpaid' : 'paid';
+  const changeStatus = async (inv: Invoice, newStatus: string) => {
     const { error } = await supabase.from('invoices').update({ payment_status: newStatus }).eq('id', inv.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus } : i));
+    setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
+    toast({ title: `Status → ${newStatus}` });
   };
 
   const exportCsv = () => {
@@ -138,19 +141,28 @@ const Invoices = () => {
                 <th className="p-3">Total</th><th className="p-3">Category</th><th className="p-3">Project</th><th className="p-3">Status</th>
               </tr></thead>
               <tbody>
-                {paged.map((inv) => (
-                  <tr key={inv.id} className="border-b last:border-0 cursor-pointer hover:bg-secondary/50">
-                    <td className="p-3"><Link to={`/invoices/${inv.id}`} className="font-medium hover:text-primary">{inv.vendor_name}</Link></td>
-                    <td className="p-3">{inv.invoice_date}</td>
-                    <td className="p-3">{inv.invoice_number}</td>
-                    <td className="p-3">{inv.currency}{inv.total?.toLocaleString()}</td>
-                    <td className="p-3">{(inv as any).category?.name ?? '—'}</td>
-                    <td className="p-3">{(inv as any).project?.name ?? '—'}</td>
-                    <td className="p-3">
-                      <button onClick={() => toggleStatus(inv)}><StatusBadge status={inv.payment_status} /></button>
-                    </td>
-                  </tr>
-                ))}
+                {paged.map((inv) => {
+                  const origCurrency = inv.currency || baseCurrency;
+                  const showOriginal = origCurrency !== baseCurrency;
+                  return (
+                    <tr key={inv.id} className="border-b last:border-0 cursor-pointer hover:bg-secondary/50">
+                      <td className="p-3"><Link to={`/invoices/${inv.id}`} className="font-medium hover:text-primary">{inv.vendor_name}</Link></td>
+                      <td className="p-3">{inv.invoice_date}</td>
+                      <td className="p-3">{inv.invoice_number}</td>
+                      <td className="p-3">
+                        <span>{formatCurrency(inv.total ?? 0, baseCurrency)}</span>
+                        {showOriginal && (
+                          <span className="ml-1.5 text-xs text-muted-foreground">({origCurrency} {inv.total?.toLocaleString()})</span>
+                        )}
+                      </td>
+                      <td className="p-3">{(inv as any).category?.name ?? '—'}</td>
+                      <td className="p-3">{(inv as any).project?.name ?? '—'}</td>
+                      <td className="p-3">
+                        <StatusDropdown status={inv.payment_status} onChangeStatus={(s) => changeStatus(inv, s)} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

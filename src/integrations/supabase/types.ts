@@ -143,6 +143,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_settings: {
+        Row: {
+          base_currency: string
+          company_name: string | null
+          created_at: string
+          email_address: string | null
+          email_provider: string | null
+          id: string
+          onboarding_done: boolean
+        }
+        Insert: {
+          base_currency?: string
+          company_name?: string | null
+          created_at?: string
+          email_address?: string | null
+          email_provider?: string | null
+          id: string
+          onboarding_done?: boolean
+        }
+        Update: {
+          base_currency?: string
+          company_name?: string | null
+          created_at?: string
+          email_address?: string | null
+          email_provider?: string | null
+          id?: string
+          onboarding_done?: boolean
+        }
+        Relationships: []
+      }
       vendor_mappings: {
         Row: {
           created_at: string | null

@@ -31,20 +31,35 @@ const Invoices = () => {
   const { baseCurrency } = useUserSettings();
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('invoices').select('*, project:projects(*), category:invoice_categories(*)').order('invoice_date', { ascending: false }),
-      supabase.from('projects').select('*'),
-      supabase.from('invoice_categories').select('*'),
-    ]).then(([i, p, c]) => {
-      console.log('[Invoices] user:', supabase.auth.getUser().then(u => console.log('[Invoices] auth user:', u.data.user?.id)));
-      console.log('[Invoices] raw query result:', i);
-      console.log('[Invoices] raw query data:', i.data);
-      console.log('[Invoices] query error:', i.error);
-      setInvoices(i.data ?? []);
+    const fetchData = async () => {
+      const authRes = await supabase.auth.getUser();
+      console.log('[Invoices] auth user id:', authRes.data.user?.id);
+
+      const [i, p, c] = await Promise.all([
+        supabase.from('invoices').select('*').order('invoice_date', { ascending: false }),
+        supabase.from('projects').select('*'),
+        supabase.from('invoice_categories').select('*'),
+      ]);
+
+      console.log('[Invoices] raw invoices:', { data: i.data, error: i.error, count: i.data?.length });
+      console.log('[Invoices] projects:', { data: p.data, error: p.error });
+      console.log('[Invoices] categories:', { data: c.data, error: c.error });
+
+      const projectsMap = new Map((p.data ?? []).map((proj: any) => [proj.id, proj]));
+      const categoriesMap = new Map((c.data ?? []).map((cat: any) => [cat.id, cat]));
+
+      const enriched = (i.data ?? []).map((inv: any) => ({
+        ...inv,
+        project: inv.project_id ? projectsMap.get(inv.project_id) ?? null : null,
+        category: inv.category_id ? categoriesMap.get(inv.category_id) ?? null : null,
+      }));
+
+      setInvoices(enriched);
       setProjects(p.data ?? []);
       setCategories(c.data ?? []);
       setLoading(false);
-    });
+    };
+    fetchData();
   }, []);
 
   const filtered = useMemo(() => {

@@ -32,10 +32,14 @@ const Invoices = () => {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('invoices').select('*, project:projects(*), category:categories(*)').order('invoice_date', { ascending: false }),
+      supabase.from('invoices').select('*, project:projects(*), category:invoice_categories(*)').order('invoice_date', { ascending: false }),
       supabase.from('projects').select('*'),
-      supabase.from('categories').select('*'),
+      supabase.from('invoice_categories').select('*'),
     ]).then(([i, p, c]) => {
+      console.log('[Invoices] user:', supabase.auth.getUser().then(u => console.log('[Invoices] auth user:', u.data.user?.id)));
+      console.log('[Invoices] raw query result:', i);
+      console.log('[Invoices] raw query data:', i.data);
+      console.log('[Invoices] query error:', i.error);
       setInvoices(i.data ?? []);
       setProjects(p.data ?? []);
       setCategories(c.data ?? []);

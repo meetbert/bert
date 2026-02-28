@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
-const placeholderMessages = [
-  { role: 'assistant' as const, text: 'Hi! I can help you find invoices, check budgets, or answer questions about your spending. Try asking something like "How much did we spend last month?"' },
+type Message = { role: 'user' | 'assistant'; text: string };
+
+const placeholderMessages: Message[] = [
+  { role: 'assistant', text: 'Hi! I can help you find invoices, check budgets, or answer questions about your spending. Try asking something like "How much did we spend last month?"' },
 ];
 
 export const ChatButton = () => {

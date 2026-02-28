@@ -4,15 +4,18 @@ import { supabase } from '@/lib/supabase';
 import { Project } from '@/types/database';
 import { Navbar } from '@/components/Navbar';
 import { StatusBadge } from '@/components/StatusBadge';
+import { EmptyState } from '@/components/EmptyState';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Plus, ChevronDown, ChevronUp, Trash2, Pencil } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, Trash2, Pencil, FolderOpen } from 'lucide-react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
 
@@ -27,6 +30,7 @@ const Projects = () => {
   const [status, setStatus] = useState<'Active' | 'Completed'>('Active');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [filterTab, setFilterTab] = useState<'all' | 'Active' | 'Completed'>('all');
 
   const fetchData = async () => {
     const [p, i] = await Promise.all([
@@ -65,12 +69,73 @@ const Projects = () => {
     toast({ title: 'Deleted' });
   };
 
+  const changeProjectStatus = async (projectId: string, newStatus: string) => {
+    const { error } = await supabase.from('projects').update({ status: newStatus }).eq('id', projectId);
+    if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    fetchData();
+    toast({ title: `Status → ${newStatus}` });
+  };
+
   const startEdit = (p: Project) => {
     setEditingId(p.id);
     setName(p.name);
-    setBudget(p.budget.toString());
-    setStatus(p.status);
+    setBudget(p.budget?.toString() ?? '');
+    setStatus(p.status as any);
     setShowForm(true);
+  };
+
+  const filteredProjects = filterTab === 'all' ? projects : projects.filter((p) => p.status === filterTab);
+  const activeProjects = filteredProjects.filter((p) => p.status === 'Active');
+  const completedProjects = filteredProjects.filter((p) => p.status === 'Completed');
+
+  const renderProjectCard = (p: Project) => {
+    const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + (i.total ?? 0), 0);
+    const hasBudget = p.budget != null && p.budget > 0;
+    const pct = hasBudget ? Math.min((spent / p.budget!) * 100, 100) : 0;
+
+    return (
+      <Card key={p.id} className="group relative">
+        <Link to={`/projects/${p.id}`}>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-semibold">{p.name}</h3>
+              <div onClick={(e) => e.preventDefault()}>
+                <Select value={p.status} onValueChange={(v) => changeProjectStatus(p.id, v)}>
+                  <SelectTrigger className="h-7 w-28 text-xs border-0 bg-transparent p-0 shadow-none">
+                    <StatusBadge status={p.status} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {hasBudget ? (
+              <>
+                <Progress value={pct} className="mt-3" />
+                <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                  <span>{formatCurrency(spent, baseCurrency)}</span>
+                  <span>of {formatCurrency(p.budget!, baseCurrency)}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mt-3 h-2 rounded-full border border-dashed border-muted-foreground/30" />
+                <div className="mt-2 flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">{formatCurrency(spent, baseCurrency)} spent</span>
+                  <button onClick={(e) => { e.preventDefault(); startEdit(p); }} className="text-primary hover:underline">Set budget →</button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Link>
+        <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <button onClick={(e) => { e.preventDefault(); startEdit(p); }} className="rounded p-1 hover:bg-secondary"><Pencil className="h-3.5 w-3.5" /></button>
+          <button onClick={(e) => { e.preventDefault(); setDeleteId(p.id); }} className="rounded p-1 text-destructive hover:bg-secondary"><Trash2 className="h-3.5 w-3.5" /></button>
+        </div>
+      </Card>
+    );
   };
 
   return (
@@ -110,56 +175,46 @@ const Projects = () => {
           </Card>
         )}
 
+        {/* Filter tabs */}
+        <div className="flex gap-1 rounded-lg bg-secondary p-1">
+          {(['all', 'Active', 'Completed'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setFilterTab(tab)}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                filterTab === tab ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab === 'all' ? 'All' : tab}
+            </button>
+          ))}
+        </div>
+
         {loading ? (
-          <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-20 animate-pulse rounded-lg bg-secondary" />)}</div>
-        ) : projects.length === 0 ? (
-          <div className="py-16 text-center text-muted-foreground">No projects yet. Create your first one above.</div>
-        ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((p) => {
-              const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + (i.total ?? 0), 0);
-              const hasBudget = p.budget != null && p.budget > 0;
-              const pct = hasBudget ? Math.min((spent / p.budget) * 100, 100) : 0;
-              return (
-                <Card key={p.id} className="group relative">
-                  <Link to={`/projects/${p.id}`}>
-                    <CardContent className="p-5">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold">{p.name}</h3>
-                        <StatusBadge status={p.status} />
-                      </div>
-                      {hasBudget ? (
-                        <>
-                          <Progress value={pct} className="mt-3" />
-                          <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                            <span>{formatCurrency(spent, baseCurrency)}</span>
-                            <span>of {formatCurrency(p.budget, baseCurrency)}</span>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="mt-3 h-2 rounded-full border border-dashed border-muted-foreground/30" />
-                          <div className="mt-2 flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">{formatCurrency(spent, baseCurrency)} spent</span>
-                            <button
-                              onClick={(e) => { e.preventDefault(); startEdit(p); }}
-                              className="text-primary hover:underline"
-                            >
-                              Set budget →
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </CardContent>
-                  </Link>
-                  <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button onClick={(e) => { e.preventDefault(); startEdit(p); }} className="rounded p-1 hover:bg-secondary"><Pencil className="h-3.5 w-3.5" /></button>
-                    <button onClick={(e) => { e.preventDefault(); setDeleteId(p.id); }} className="rounded p-1 text-primary hover:bg-secondary"><Trash2 className="h-3.5 w-3.5" /></button>
-                  </div>
-                </Card>
-              );
-            })}
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-lg" />)}
           </div>
+        ) : filteredProjects.length === 0 ? (
+          <EmptyState icon={FolderOpen} title="No projects yet" description="Create your first project above to start tracking budgets." />
+        ) : (
+          <>
+            {/* Active projects */}
+            {filterTab !== 'Completed' && activeProjects.length > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {activeProjects.map(renderProjectCard)}
+              </div>
+            )}
+
+            {/* Completed / Archive section */}
+            {completedProjects.length > 0 && (
+              <div>
+                {filterTab === 'all' && <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-muted-foreground">Archive</h2>}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {completedProjects.map(renderProjectCard)}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Delete confirm dialog */}

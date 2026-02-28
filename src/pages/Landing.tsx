@@ -27,12 +27,9 @@ const Landing = () => {
         <p className="mt-6 max-w-xl text-lg text-muted-foreground">
           Your AI-powered invoice assistant for production budgets. Forward an email. Bert handles the rest.
         </p>
-        <div className="mt-10 flex gap-4">
+        <div className="mt-10">
           <Button asChild size="lg">
             <Link to="/login">Get Started</Link>
-          </Button>
-          <Button asChild variant="outline" size="lg">
-            <Link to="/dashboard">View Demo</Link>
           </Button>
         </div>
 

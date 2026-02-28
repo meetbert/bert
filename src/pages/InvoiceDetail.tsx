@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
 import { Navbar } from '@/components/Navbar';
@@ -8,19 +8,23 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { ArrowLeft, Pencil, Check, X, Download, User, DollarSign, FolderOpen, Tag } from 'lucide-react';
+import { ArrowLeft, Pencil, Check, X, Download, User, DollarSign, FolderOpen, Tag, Trash2, Clock } from 'lucide-react';
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Invoice>>({});
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const fetchInvoice = async () => {
     if (!id) return;
@@ -42,7 +46,6 @@ const InvoiceDetail = () => {
     setEditData({
       description: invoice.description,
       line_items: invoice.line_items,
-      payment_terms: invoice.payment_terms,
       due_date: invoice.due_date,
       subtotal: invoice.subtotal,
       vat: invoice.vat,
@@ -65,12 +68,12 @@ const InvoiceDetail = () => {
     const newStatus = invoice.payment_status === 'paid' ? 'unpaid' : 'paid';
     await supabase.from('invoices').update({ payment_status: newStatus }).eq('id', invoice.id);
     fetchInvoice();
+    toast({ title: `Marked as ${newStatus}` });
   };
 
   const assignProject = async (projectId: string) => {
     if (!invoice) return;
     await supabase.from('invoices').update({ project_id: projectId }).eq('id', invoice.id);
-    await supabase.from('vendor_mappings').upsert({ vendor_name: invoice.vendor_name, project_id: projectId }, { onConflict: 'vendor_name' });
     fetchInvoice();
     toast({ title: 'Project assigned' });
   };
@@ -82,7 +85,35 @@ const InvoiceDetail = () => {
     toast({ title: 'Category assigned' });
   };
 
-  if (loading) return <div className="min-h-screen"><Navbar /><div className="container py-8"><div className="h-60 animate-pulse rounded-lg bg-secondary" /></div></div>;
+  const handleDelete = async () => {
+    if (!invoice) return;
+    const { error } = await supabase.from('invoices').delete().eq('id', invoice.id);
+    if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    toast({ title: 'Invoice deleted' });
+    navigate('/invoices');
+  };
+
+  // Placeholder activity log entries
+  const activityLog = invoice ? [
+    { date: invoice.created_at ?? invoice.invoice_date ?? '—', text: 'Invoice created' },
+    ...(invoice.payment_status === 'paid' ? [{ date: invoice.updated_at ?? new Date().toISOString().slice(0, 10), text: 'Marked as paid' }] : []),
+    ...(invoice.project_id ? [{ date: invoice.updated_at ?? new Date().toISOString().slice(0, 10), text: `Assigned to project` }] : []),
+  ] : [];
+
+  if (loading) return (
+    <div className="min-h-screen">
+      <Navbar />
+      <div className="container space-y-6 py-8">
+        <Skeleton className="h-5 w-24" />
+        <Skeleton className="h-8 w-64" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
+        </div>
+        <Skeleton className="h-60 rounded-lg" />
+      </div>
+    </div>
+  );
+
   if (!invoice) return <div className="min-h-screen"><Navbar /><div className="container py-16 text-center text-muted-foreground">Invoice not found</div></div>;
 
   return (
@@ -98,7 +129,6 @@ const InvoiceDetail = () => {
               <span className="rounded bg-secondary px-2 py-1 text-xs">{invoice.invoice_date}</span>
               <span className="rounded bg-secondary px-2 py-1 text-xs">#{invoice.invoice_number}</span>
               <span className="rounded bg-secondary px-2 py-1 text-xs">{invoice.currency}</span>
-              <span className="rounded bg-secondary px-2 py-1 text-xs">{invoice.document_type}</span>
             </div>
           </div>
           <div className="flex gap-2">
@@ -107,8 +137,29 @@ const InvoiceDetail = () => {
               Mark as {invoice.payment_status === 'paid' ? 'Unpaid' : 'Paid'}
             </Button>
             {!editing && <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="mr-1 h-3.5 w-3.5" /> Edit</Button>}
+            <Button variant="destructive" size="sm" onClick={() => setShowDeleteModal(true)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Delete</Button>
           </div>
         </div>
+
+        {/* Activity Log */}
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Activity</CardTitle></CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {activityLog.map((entry, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary">
+                    <Clock className="h-3 w-3 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-sm">{entry.text}</p>
+                    <p className="text-xs text-muted-foreground">{typeof entry.date === 'string' ? entry.date.slice(0, 10) : '—'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard title="Vendor" value={invoice.vendor_name} icon={<User className="h-5 w-5 text-primary" />} />
@@ -165,14 +216,6 @@ const InvoiceDetail = () => {
                 )}
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Payment Terms</Label>
-                {editing ? (
-                  <Input value={editData.payment_terms ?? ''} onChange={(e) => setEditData({ ...editData, payment_terms: e.target.value })} />
-                ) : (
-                  <p className="text-sm">{invoice.payment_terms || '—'}</p>
-                )}
-              </div>
-              <div>
                 <Label className="text-xs text-muted-foreground">Due Date</Label>
                 {editing ? (
                   <Input type="date" value={editData.due_date ?? ''} onChange={(e) => setEditData({ ...editData, due_date: e.target.value })} />
@@ -202,6 +245,18 @@ const InvoiceDetail = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* Delete confirmation modal */}
+        <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Delete this invoice?</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">This action cannot be undone. The invoice from <strong>{invoice.vendor_name}</strong> will be permanently removed.</p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleDelete}>Delete Invoice</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

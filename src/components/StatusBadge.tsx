@@ -6,14 +6,14 @@ interface StatusBadgeProps {
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className }) => {
-  const base = 'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium';
+  const base = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold';
   const variants: Record<string, string> = {
-    unpaid: 'border-foreground/20 text-foreground',
-    paid: 'border-foreground bg-foreground text-background',
-    overdue: 'border-primary text-primary',
-    Active: 'border-foreground/20 text-foreground',
-    Completed: 'border-foreground bg-foreground text-background',
+    paid: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
+    unpaid: 'bg-destructive text-destructive-foreground',
+    overdue: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
+    Active: 'bg-secondary text-secondary-foreground',
+    Completed: 'bg-foreground text-background',
   };
 
-  return <span className={cn(base, variants[status] ?? 'border-foreground/20 text-foreground', className)}>{status}</span>;
+  return <span className={cn(base, variants[status] ?? 'bg-secondary text-secondary-foreground', className)}>{status}</span>;
 };

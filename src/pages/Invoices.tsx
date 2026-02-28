@@ -1,20 +1,24 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
 import { Navbar } from '@/components/Navbar';
 import { StatusDropdown } from '@/components/StatusDropdown';
+import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { EmptyState } from '@/components/EmptyState';
 import { toast } from '@/hooks/use-toast';
-import { Search, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Download, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
 
 const PAGE_SIZE = 25;
 
 const Invoices = () => {
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -64,13 +68,13 @@ const Invoices = () => {
     const { error } = await supabase.from('invoices').update({ payment_status: newStatus }).eq('id', inv.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
-    toast({ title: `Status → ${newStatus}` });
+    toast({ title: `Marked as ${newStatus}` });
   };
 
   const exportCsv = () => {
-    const headers = ['Vendor', 'Date', 'Invoice #', 'Total', 'Currency', 'Category', 'Project', 'Status'];
+    const headers = ['Vendor', 'Date', 'Due Date', 'Invoice #', 'Total', 'Currency', 'Category', 'Project', 'Status'];
     const rows = filtered.map((i) => [
-      i.vendor_name, i.invoice_date, i.invoice_number, i.total, i.currency,
+      i.vendor_name, i.invoice_date, i.due_date ?? '', i.invoice_number, i.total, i.currency,
       (i as any).category?.name ?? '', (i as any).project?.name ?? '', i.payment_status,
     ]);
     const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
@@ -130,14 +134,35 @@ const Invoices = () => {
         <p className="text-xs text-muted-foreground">{filtered.length} invoice{filtered.length !== 1 ? 's' : ''}</p>
 
         {loading ? (
-          <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-12 animate-pulse rounded bg-secondary" />)}</div>
-        ) : paged.length === 0 ? (
-          <div className="py-16 text-center text-muted-foreground">No invoices found.</div>
-        ) : (
           <div className="overflow-auto rounded-lg border">
             <table className="w-full text-sm">
               <thead><tr className="border-b bg-secondary/30 text-left text-muted-foreground">
-                <th className="p-3">Vendor</th><th className="p-3">Date</th><th className="p-3">Invoice #</th>
+                <th className="p-3">Vendor</th><th className="p-3">Date</th><th className="p-3">Due Date</th><th className="p-3">Invoice #</th>
+                <th className="p-3">Total</th><th className="p-3">Category</th><th className="p-3">Project</th><th className="p-3">Status</th>
+              </tr></thead>
+              <tbody>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i} className="border-b">
+                    <td className="p-3"><Skeleton className="h-4 w-28" /></td>
+                    <td className="p-3"><Skeleton className="h-4 w-20" /></td>
+                    <td className="p-3"><Skeleton className="h-4 w-20" /></td>
+                    <td className="p-3"><Skeleton className="h-4 w-16" /></td>
+                    <td className="p-3"><Skeleton className="h-4 w-16" /></td>
+                    <td className="p-3"><Skeleton className="h-4 w-20" /></td>
+                    <td className="p-3"><Skeleton className="h-4 w-20" /></td>
+                    <td className="p-3"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : paged.length === 0 ? (
+          <EmptyState icon={FileText} title="No invoices found" description="Try adjusting your filters or forward an invoice to your inbox to get started." />
+        ) : (
+          <div className="overflow-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b bg-secondary/30 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="p-3">Vendor</th><th className="p-3">Date</th><th className="p-3">Due Date</th><th className="p-3">Invoice #</th>
                 <th className="p-3">Total</th><th className="p-3">Category</th><th className="p-3">Project</th><th className="p-3">Status</th>
               </tr></thead>
               <tbody>
@@ -145,19 +170,24 @@ const Invoices = () => {
                   const origCurrency = inv.currency || baseCurrency;
                   const showOriginal = origCurrency !== baseCurrency;
                   return (
-                    <tr key={inv.id} className="border-b last:border-0 cursor-pointer hover:bg-secondary/50">
-                      <td className="p-3"><Link to={`/invoices/${inv.id}`} className="font-medium hover:text-primary">{inv.vendor_name}</Link></td>
-                      <td className="p-3">{inv.invoice_date}</td>
-                      <td className="p-3">{inv.invoice_number}</td>
+                    <tr
+                      key={inv.id}
+                      onClick={() => navigate(`/invoices/${inv.id}`)}
+                      className="border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60"
+                    >
+                      <td className="p-3 font-medium">{inv.vendor_name}</td>
+                      <td className="p-3 text-muted-foreground">{inv.invoice_date}</td>
+                      <td className="p-3 text-muted-foreground">{inv.due_date ?? '—'}</td>
+                      <td className="p-3 text-muted-foreground">{inv.invoice_number}</td>
                       <td className="p-3">
-                        <span>{formatCurrency(inv.total ?? 0, baseCurrency)}</span>
+                        <span className="font-medium">{formatCurrency(inv.total ?? 0, baseCurrency)}</span>
                         {showOriginal && (
                           <span className="ml-1.5 text-xs text-muted-foreground">({origCurrency} {inv.total?.toLocaleString()})</span>
                         )}
                       </td>
-                      <td className="p-3">{(inv as any).category?.name ?? '—'}</td>
-                      <td className="p-3">{(inv as any).project?.name ?? '—'}</td>
-                      <td className="p-3">
+                      <td className="p-3 text-muted-foreground">{(inv as any).category?.name ?? '—'}</td>
+                      <td className="p-3 text-muted-foreground">{(inv as any).project?.name ?? '—'}</td>
+                      <td className="p-3" onClick={(e) => e.stopPropagation()}>
                         <StatusDropdown status={inv.payment_status} onChangeStatus={(s) => changeStatus(inv, s)} />
                       </td>
                     </tr>

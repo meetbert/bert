@@ -12,9 +12,9 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { FileText, DollarSign, FolderOpen, AlertCircle, Clock, CalendarDays, TrendingUp } from 'lucide-react';
-import { CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis, BarChart, Bar, Cell } from 'recharts';
+import { CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { formatCurrency, currencySymbol } from '@/lib/currency';
+import { formatCurrency } from '@/lib/currency';
 
 const Dashboard = () => {
   const navigate = useNavigate();

@@ -12,7 +12,7 @@ const placeholderMessages: Message[] = [
 
 export const ChatButton = () => {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState(placeholderMessages);
+  const [messages, setMessages] = useState<Message[]>(placeholderMessages);
   const [input, setInput] = useState('');
 
   const send = () => {

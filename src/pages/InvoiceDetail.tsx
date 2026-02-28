@@ -96,8 +96,8 @@ const InvoiceDetail = () => {
   // Placeholder activity log entries
   const activityLog = invoice ? [
     { date: invoice.created_at ?? invoice.invoice_date ?? '—', text: 'Invoice created' },
-    ...(invoice.payment_status === 'paid' ? [{ date: invoice.updated_at ?? new Date().toISOString().slice(0, 10), text: 'Marked as paid' }] : []),
-    ...(invoice.project_id ? [{ date: invoice.updated_at ?? new Date().toISOString().slice(0, 10), text: `Assigned to project` }] : []),
+    ...(invoice.payment_status === 'paid' ? [{ date: new Date().toISOString().slice(0, 10), text: 'Marked as paid' }] : []),
+    ...(invoice.project_id ? [{ date: new Date().toISOString().slice(0, 10), text: 'Assigned to project' }] : []),
   ] : [];
 
   if (loading) return (

@@ -14,7 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
-      categories: {
+      agent_log: {
+        Row: {
+          action: string
+          created_at: string
+          details: string | null
+          id: string
+          invoice_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          invoice_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          invoice_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_log_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_contacts: {
+        Row: {
+          created_at: string | null
+          display_name: string | null
+          email: string
+          id: string
+          reachable: boolean | null
+          sender_type: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          display_name?: string | null
+          email: string
+          id?: string
+          reachable?: boolean | null
+          sender_type?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          display_name?: string | null
+          email?: string
+          id?: string
+          reachable?: boolean | null
+          sender_type?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      invoice_categories: {
         Row: {
           id: string
           name: string
@@ -29,86 +94,175 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_threads: {
+        Row: {
+          created_at: string
+          id: string
+          invoice_id: string
+          thread_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invoice_id: string
+          thread_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          thread_id?: string
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
           category_id: string | null
-          created_at: string | null
+          created_at: string
           currency: string | null
           description: string | null
+          document_hash: string | null
           document_path: string | null
-          document_type: string | null
           due_date: string | null
+          follow_up_count: number
+          human_notified_at: string | null
           id: string
           invoice_date: string | null
           invoice_number: string | null
-          line_items: string | null
-          payment_status: string | null
-          payment_terms: string | null
-          processed_at: string | null
+          last_followed_up_at: string | null
+          line_items: Json | null
+          payment_status: string
+          processing_status: string
           project_id: string | null
           subtotal: number | null
           total: number | null
+          updated_at: string | null
+          user_id: string
           vat: number | null
           vendor_name: string | null
         }
         Insert: {
           category_id?: string | null
-          created_at?: string | null
+          created_at?: string
           currency?: string | null
           description?: string | null
+          document_hash?: string | null
           document_path?: string | null
-          document_type?: string | null
           due_date?: string | null
+          follow_up_count?: number
+          human_notified_at?: string | null
           id?: string
           invoice_date?: string | null
           invoice_number?: string | null
-          line_items?: string | null
-          payment_status?: string | null
-          payment_terms?: string | null
-          processed_at?: string | null
+          last_followed_up_at?: string | null
+          line_items?: Json | null
+          payment_status?: string
+          processing_status?: string
           project_id?: string | null
           subtotal?: number | null
           total?: number | null
+          updated_at?: string | null
+          user_id: string
           vat?: number | null
           vendor_name?: string | null
         }
         Update: {
           category_id?: string | null
-          created_at?: string | null
+          created_at?: string
           currency?: string | null
           description?: string | null
+          document_hash?: string | null
           document_path?: string | null
-          document_type?: string | null
           due_date?: string | null
+          follow_up_count?: number
+          human_notified_at?: string | null
           id?: string
           invoice_date?: string | null
           invoice_number?: string | null
-          line_items?: string | null
-          payment_status?: string | null
-          payment_terms?: string | null
-          processed_at?: string | null
+          last_followed_up_at?: string | null
+          line_items?: Json | null
+          payment_status?: string
+          processing_status?: string
           project_id?: string | null
           subtotal?: number | null
           total?: number | null
+          updated_at?: string | null
+          user_id?: string
           vat?: number | null
           vendor_name?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "invoices_category_id_fkey"
+            foreignKeyName: "invoices_new_category_id_fkey"
             columns: ["category_id"]
             isOneToOne: false
-            referencedRelation: "categories"
+            referencedRelation: "invoice_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_categories: {
+        Row: {
+          budget: number
+          category_id: string
+          created_at: string
+          id: string
+          project_id: string
+        }
+        Insert: {
+          budget?: number
+          category_id: string
+          created_at?: string
+          id?: string
+          project_id: string
+        }
+        Update: {
+          budget?: number
+          category_id?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_categories"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "invoices_project_id_fkey"
+            foreignKeyName: "project_categories_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
+      }
+      project_documents: {
+        Row: {
+          file_name: string
+          id: string
+          project_id: string
+          storage_path: string
+          uploaded_at: string
+        }
+        Insert: {
+          file_name: string
+          id?: string
+          project_id: string
+          storage_path: string
+          uploaded_at?: string
+        }
+        Update: {
+          file_name?: string
+          id?: string
+          project_id?: string
+          storage_path?: string
+          uploaded_at?: string
+        }
+        Relationships: []
       }
       projects: {
         Row: {
@@ -120,6 +274,7 @@ export type Database = {
           known_vendors: string[] | null
           name: string
           status: string | null
+          user_id: string
         }
         Insert: {
           budget?: number | null
@@ -130,6 +285,7 @@ export type Database = {
           known_vendors?: string[] | null
           name: string
           status?: string | null
+          user_id: string
         }
         Update: {
           budget?: number | null
@@ -140,67 +296,48 @@ export type Database = {
           known_vendors?: string[] | null
           name?: string
           status?: string | null
+          user_id?: string
         }
         Relationships: []
       }
       user_settings: {
         Row: {
+          agentmail_inbox: string | null
           base_currency: string
           company_name: string | null
           created_at: string
           email_address: string | null
-          email_provider: string | null
+          email_provider: string
           id: string
+          max_followups: number
+          notification_channel: string
           onboarding_done: boolean
         }
         Insert: {
+          agentmail_inbox?: string | null
           base_currency?: string
           company_name?: string | null
           created_at?: string
           email_address?: string | null
-          email_provider?: string | null
+          email_provider?: string
           id: string
+          max_followups?: number
+          notification_channel?: string
           onboarding_done?: boolean
         }
         Update: {
+          agentmail_inbox?: string | null
           base_currency?: string
           company_name?: string | null
           created_at?: string
           email_address?: string | null
-          email_provider?: string | null
+          email_provider?: string
           id?: string
+          max_followups?: number
+          notification_channel?: string
           onboarding_done?: boolean
         }
         Relationships: []
-      }
-      vendor_mappings: {
-        Row: {
-          created_at: string | null
-          id: string
-          project_id: string | null
-          vendor_name: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          project_id?: string | null
-          vendor_name: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          project_id?: string | null
-          vendor_name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "vendor_mappings_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
       }
     }
     Views: {

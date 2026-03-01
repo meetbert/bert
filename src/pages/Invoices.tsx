@@ -11,9 +11,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EmptyState } from '@/components/EmptyState';
 import { toast } from '@/hooks/use-toast';
-import { Search, Download, ChevronLeft, ChevronRight, FileText, Archive } from 'lucide-react';
+import { Search, Download, ChevronLeft, ChevronRight, FileText, Archive, Pencil } from 'lucide-react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
+
+const CURRENCY = 'GBP';
 
 const PAGE_SIZE = 25;
 
@@ -243,26 +245,31 @@ const Invoices = () => {
                     <tr
                       key={inv.id}
                       onClick={() => navigate(`/invoices/${inv.id}`)}
-                      className={`border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60 ${isArchived ? 'opacity-60' : ''}`}
+                      className={`group border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60 ${isArchived ? 'opacity-60' : ''}`}
                     >
                       <td className="p-3 font-medium">{inv.vendor_name}</td>
                       <td className="p-3 text-muted-foreground">{inv.invoice_date}</td>
                       <td className="p-3 text-muted-foreground">{inv.due_date ?? '—'}</td>
                       <td className="p-3 text-muted-foreground">{inv.invoice_number}</td>
                       <td className="p-3">
-                        <span className="font-medium">{formatCurrency(inv.total ?? 0, baseCurrency)}</span>
-                        {showOriginal && (
-                          <span className="ml-1.5 text-xs text-muted-foreground">({origCurrency} {inv.total?.toLocaleString()})</span>
-                        )}
+                        <span className="font-medium">{formatCurrency(inv.total ?? 0, CURRENCY)}</span>
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
                         {(inv as any).category?.name ? (
                           <span className="text-muted-foreground">{(inv as any).category.name}</span>
                         ) : (
-                          <Select onValueChange={(v) => assignCategory(inv.id, v)}>
-                            <SelectTrigger className="h-7 w-32 text-xs border-dashed"><SelectValue placeholder="Assign..." /></SelectTrigger>
-                            <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
-                          </Select>
+                          <div className="relative">
+                            <span className="flex items-center gap-1 text-muted-foreground/40 group-hover:hidden">—</span>
+                            <div className="hidden group-hover:block">
+                              <Select onValueChange={(v) => assignCategory(inv.id, v)}>
+                                <SelectTrigger className="h-7 w-28 text-xs border-dashed gap-1">
+                                  <Pencil className="h-3 w-3 shrink-0" />
+                                  <SelectValue placeholder="Assign" />
+                                </SelectTrigger>
+                                <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
+                              </Select>
+                            </div>
+                          </div>
                         )}
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
@@ -272,10 +279,18 @@ const Invoices = () => {
                             {isArchived && <Archive className="h-3 w-3 text-muted-foreground/60" />}
                           </span>
                         ) : (
-                          <Select onValueChange={(v) => assignProject(inv.id, v)}>
-                            <SelectTrigger className="h-7 w-32 text-xs border-dashed"><SelectValue placeholder="Assign..." /></SelectTrigger>
-                            <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                          </Select>
+                          <div className="relative">
+                            <span className="flex items-center gap-1 text-muted-foreground/40 group-hover:hidden">—</span>
+                            <div className="hidden group-hover:block">
+                              <Select onValueChange={(v) => assignProject(inv.id, v)}>
+                                <SelectTrigger className="h-7 w-28 text-xs border-dashed gap-1">
+                                  <Pencil className="h-3 w-3 shrink-0" />
+                                  <SelectValue placeholder="Assign" />
+                                </SelectTrigger>
+                                <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                              </Select>
+                            </div>
+                          </div>
                         )}
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { Invoice, Project, Category } from '@/types/database';
+import { Invoice, Project } from '@/types/database';
 import { Navbar } from '@/components/Navbar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';

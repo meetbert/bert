@@ -245,17 +245,14 @@ const Invoices = () => {
                     <tr
                       key={inv.id}
                       onClick={() => navigate(`/invoices/${inv.id}`)}
-                      className={`border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60 ${isArchived ? 'opacity-60' : ''}`}
+                      className={`group border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60 ${isArchived ? 'opacity-60' : ''}`}
                     >
                       <td className="p-3 font-medium">{inv.vendor_name}</td>
                       <td className="p-3 text-muted-foreground">{inv.invoice_date}</td>
                       <td className="p-3 text-muted-foreground">{inv.due_date ?? '—'}</td>
                       <td className="p-3 text-muted-foreground">{inv.invoice_number}</td>
                       <td className="p-3">
-                        <span className="font-medium">{formatCurrency(inv.total ?? 0, baseCurrency)}</span>
-                        {showOriginal && (
-                          <span className="ml-1.5 text-xs text-muted-foreground">({origCurrency} {inv.total?.toLocaleString()})</span>
-                        )}
+                        <span className="font-medium">{formatCurrency(inv.total ?? 0, CURRENCY)}</span>
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
                         {(inv as any).category?.name ? (

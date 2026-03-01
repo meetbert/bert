@@ -258,10 +258,18 @@ const Invoices = () => {
                         {(inv as any).category?.name ? (
                           <span className="text-muted-foreground">{(inv as any).category.name}</span>
                         ) : (
-                          <Select onValueChange={(v) => assignCategory(inv.id, v)}>
-                            <SelectTrigger className="h-7 w-32 text-xs border-dashed"><SelectValue placeholder="Assign..." /></SelectTrigger>
-                            <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
-                          </Select>
+                          <div className="relative">
+                            <span className="flex items-center gap-1 text-muted-foreground/40 group-hover:hidden">—</span>
+                            <div className="hidden group-hover:block">
+                              <Select onValueChange={(v) => assignCategory(inv.id, v)}>
+                                <SelectTrigger className="h-7 w-28 text-xs border-dashed gap-1">
+                                  <Pencil className="h-3 w-3 shrink-0" />
+                                  <SelectValue placeholder="Assign" />
+                                </SelectTrigger>
+                                <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
+                              </Select>
+                            </div>
+                          </div>
                         )}
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
@@ -271,10 +279,18 @@ const Invoices = () => {
                             {isArchived && <Archive className="h-3 w-3 text-muted-foreground/60" />}
                           </span>
                         ) : (
-                          <Select onValueChange={(v) => assignProject(inv.id, v)}>
-                            <SelectTrigger className="h-7 w-32 text-xs border-dashed"><SelectValue placeholder="Assign..." /></SelectTrigger>
-                            <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                          </Select>
+                          <div className="relative">
+                            <span className="flex items-center gap-1 text-muted-foreground/40 group-hover:hidden">—</span>
+                            <div className="hidden group-hover:block">
+                              <Select onValueChange={(v) => assignProject(inv.id, v)}>
+                                <SelectTrigger className="h-7 w-28 text-xs border-dashed gap-1">
+                                  <Pencil className="h-3 w-3 shrink-0" />
+                                  <SelectValue placeholder="Assign" />
+                                </SelectTrigger>
+                                <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                              </Select>
+                            </div>
+                          </div>
                         )}
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>

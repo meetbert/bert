@@ -13,7 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Plus, LogOut, Pencil, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Plus, LogOut, Pencil, Trash2, RefreshCw, Wifi } from 'lucide-react';
 import { SUPPORTED_CURRENCIES, currencySymbol } from '@/lib/currency';
 
 const Settings = () => {
@@ -28,6 +28,7 @@ const Settings = () => {
   const [emailAddress, setEmailAddress] = useState('');
   const [appPassword, setAppPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
 
   // Category form
   const [newCategory, setNewCategory] = useState('');
@@ -42,10 +43,10 @@ const Settings = () => {
     if (!user) return;
     Promise.all([
       supabase.from('user_settings').select('*').eq('id', user.id).single(),
-      supabase.from('categories').select('*').order('name'),
+      supabase.from('invoice_categories').select('*').order('name'),
     ]).then(([s, c]) => {
       if (s.data) {
-        setSettings(s.data);
+        setSettings(s.data as any);
         setEmailAddress(s.data.email_address ?? '');
         setEmailProvider(s.data.email_provider ?? 'gmail');
         setBaseCurrency(s.data.base_currency ?? 'EUR');
@@ -62,14 +63,22 @@ const Settings = () => {
     toast({ title: 'Saved' });
   };
 
+  const testConnection = async () => {
+    setTestingConnection(true);
+    // Placeholder — would call an edge function
+    await new Promise((r) => setTimeout(r, 1500));
+    setTestingConnection(false);
+    toast({ title: 'Connection test', description: 'Backend required: No test endpoint configured yet.' });
+  };
+
   const refreshCategories = async () => {
-    const { data } = await supabase.from('categories').select('*').order('name');
+    const { data } = await supabase.from('invoice_categories').select('*').order('name');
     setCategories(data ?? []);
   };
 
   const addCategory = async () => {
     if (!newCategory.trim()) return;
-    const { error } = await supabase.from('categories').insert({ name: newCategory.trim() });
+    const { error } = await supabase.from('invoice_categories').insert({ name: newCategory.trim() });
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setNewCategory('');
     refreshCategories();
@@ -78,7 +87,7 @@ const Settings = () => {
 
   const renameCategory = async () => {
     if (!editingCategoryId || !editingCategoryName.trim()) return;
-    const { error } = await supabase.from('categories').update({ name: editingCategoryName.trim() }).eq('id', editingCategoryId);
+    const { error } = await supabase.from('invoice_categories').update({ name: editingCategoryName.trim() }).eq('id', editingCategoryId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setEditingCategoryId(null);
     setEditingCategoryName('');
@@ -88,7 +97,7 @@ const Settings = () => {
 
   const deleteCategory = async () => {
     if (!deleteCategoryId) return;
-    const { error } = await supabase.from('categories').delete().eq('id', deleteCategoryId);
+    const { error } = await supabase.from('invoice_categories').delete().eq('id', deleteCategoryId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setDeleteCategoryId(null);
     refreshCategories();
@@ -117,6 +126,13 @@ const Settings = () => {
         <Card>
           <CardHeader><CardTitle className="text-sm">Inbox Settings</CardTitle></CardHeader>
           <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Last synced: —</p>
+              <Button variant="outline" size="sm" onClick={testConnection} disabled={testingConnection}>
+                {testingConnection ? <RefreshCw className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Wifi className="mr-1 h-3.5 w-3.5" />}
+                Test Connection
+              </Button>
+            </div>
             <RadioGroup value={emailProvider} onValueChange={setEmailProvider} className="flex gap-4">
               {['gmail', 'outlook', 'other'].map((p) => (
                 <div key={p} className="flex items-center gap-2">

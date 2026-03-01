@@ -1,16 +1,17 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
 import { Navbar } from '@/components/Navbar';
 import { StatusDropdown } from '@/components/StatusDropdown';
+import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EmptyState } from '@/components/EmptyState';
 import { toast } from '@/hooks/use-toast';
-import { Search, Download, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { Search, Download, ChevronLeft, ChevronRight, FileText, Archive } from 'lucide-react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
 
@@ -26,58 +27,69 @@ const Invoices = () => {
   const [filterProject, setFilterProject] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterProjectScope, setFilterProjectScope] = useState<'active' | 'all' | 'archived'>('active');
+  const [quickFilter, setQuickFilter] = useState<'all' | 'unpaid_overdue'>('all');
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(0);
   const { baseCurrency } = useUserSettings();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const authRes = await supabase.auth.getUser();
-      console.log('[Invoices] auth user id:', authRes.data.user?.id);
+  const fetchData = useCallback(async () => {
+    const [i, p, c] = await Promise.all([
+      supabase.from('invoices').select('*').order('invoice_date', { ascending: false }),
+      supabase.from('projects').select('*'),
+      supabase.from('invoice_categories').select('*'),
+    ]);
 
-      const [i, p, c] = await Promise.all([
-        supabase.from('invoices').select('*').order('invoice_date', { ascending: false }),
-        supabase.from('projects').select('*'),
-        supabase.from('invoice_categories').select('*'),
-      ]);
+    const projectsMap = new Map((p.data ?? []).map((proj: any) => [proj.id, proj]));
+    const categoriesMap = new Map((c.data ?? []).map((cat: any) => [cat.id, cat]));
 
-      console.log('[Invoices] raw invoices:', { data: i.data, error: i.error, count: i.data?.length });
-      console.log('[Invoices] projects:', { data: p.data, error: p.error });
-      console.log('[Invoices] categories:', { data: c.data, error: c.error });
+    const enriched = (i.data ?? []).map((inv: any) => ({
+      ...inv,
+      project: inv.project_id ? projectsMap.get(inv.project_id) ?? null : null,
+      category: inv.category_id ? categoriesMap.get(inv.category_id) ?? null : null,
+    }));
 
-      const projectsMap = new Map((p.data ?? []).map((proj: any) => [proj.id, proj]));
-      const categoriesMap = new Map((c.data ?? []).map((cat: any) => [cat.id, cat]));
-
-      const enriched = (i.data ?? []).map((inv: any) => ({
-        ...inv,
-        project: inv.project_id ? projectsMap.get(inv.project_id) ?? null : null,
-        category: inv.category_id ? categoriesMap.get(inv.category_id) ?? null : null,
-      }));
-
-      setInvoices(enriched);
-      setProjects(p.data ?? []);
-      setCategories(c.data ?? []);
-      setLoading(false);
-    };
-    fetchData();
+    setInvoices(enriched);
+    setProjects(p.data ?? []);
+    setCategories(c.data ?? []);
+    setLoading(false);
   }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const activeProjects = useMemo(() => projects.filter(p => p.status === 'Active'), [projects]);
+  const archivedProjects = useMemo(() => projects.filter(p => p.status === 'Completed'), [projects]);
+  const archivedProjectIds = useMemo(() => new Set(archivedProjects.map(p => p.id)), [archivedProjects]);
 
   const filtered = useMemo(() => {
     let result = [...invoices];
+
+    // Quick filter
+    if (quickFilter === 'unpaid_overdue') {
+      result = result.filter((i) => i.payment_status === 'unpaid' || i.payment_status === 'overdue');
+    }
+
+    // Project scope filter
+    if (filterProjectScope === 'active') {
+      result = result.filter((i) => !i.project_id || !archivedProjectIds.has(i.project_id));
+    } else if (filterProjectScope === 'archived') {
+      result = result.filter((i) => i.project_id && archivedProjectIds.has(i.project_id));
+    }
+
     if (search) {
       const q = search.toLowerCase();
       result = result.filter((i) => i.vendor_name?.toLowerCase().includes(q) || i.invoice_number?.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q));
     }
     if (filterProject !== 'all') result = result.filter((i) => i.project_id === filterProject);
-    if (filterCategory !== 'all') result = result.filter((i) => i.category_id === parseInt(filterCategory));
+    if (filterCategory !== 'all') result = result.filter((i) => i.category_id === filterCategory);
     if (filterStatus !== 'all') result = result.filter((i) => i.payment_status === filterStatus);
     result.sort((a, b) => {
       if (sort === 'newest') return (b.invoice_date ?? '').localeCompare(a.invoice_date ?? '');
       if (sort === 'oldest') return (a.invoice_date ?? '').localeCompare(b.invoice_date ?? '');
-      return b.total - a.total;
+      return (b.total ?? 0) - (a.total ?? 0);
     });
     return result;
-  }, [invoices, search, filterProject, filterCategory, filterStatus, sort]);
+  }, [invoices, search, filterProject, filterCategory, filterStatus, sort, quickFilter, filterProjectScope, archivedProjectIds]);
 
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
@@ -87,6 +99,22 @@ const Invoices = () => {
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
     toast({ title: `Marked as ${newStatus}` });
+  };
+
+  const assignProject = async (invoiceId: string, projectId: string) => {
+    const { error } = await supabase.from('invoices').update({ project_id: projectId }).eq('id', invoiceId);
+    if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    const proj = projects.find(p => p.id === projectId);
+    setInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, project_id: projectId, project: proj ?? null } as any : i));
+    toast({ title: 'Project assigned' });
+  };
+
+  const assignCategory = async (invoiceId: string, categoryId: string) => {
+    const { error } = await supabase.from('invoices').update({ category_id: categoryId }).eq('id', invoiceId);
+    if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    const cat = categories.find(c => c.id.toString() === categoryId);
+    setInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
+    toast({ title: 'Category assigned' });
   };
 
   const exportCsv = () => {
@@ -108,6 +136,29 @@ const Invoices = () => {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Invoices</h1>
           <Button variant="outline" size="sm" onClick={exportCsv}><Download className="mr-1 h-4 w-4" /> Export CSV</Button>
+        </div>
+
+        {/* Quick filter + Project scope tabs */}
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex gap-1 rounded-lg bg-secondary p-1">
+            <button
+              onClick={() => { setQuickFilter('all'); setPage(0); }}
+              className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${quickFilter === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >All</button>
+            <button
+              onClick={() => { setQuickFilter('unpaid_overdue'); setPage(0); }}
+              className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${quickFilter === 'unpaid_overdue' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >Unpaid / Overdue</button>
+          </div>
+          <div className="flex gap-1 rounded-lg bg-secondary p-1">
+            {([['active', 'Active Projects'], ['all', 'All'], ['archived', 'Archived']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => { setFilterProjectScope(key); setPage(0); }}
+                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${filterProjectScope === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >{label}</button>
+            ))}
+          </div>
         </div>
 
         {/* Filters */}
@@ -175,7 +226,7 @@ const Invoices = () => {
             </table>
           </div>
         ) : paged.length === 0 ? (
-          <EmptyState icon={FileText} title="No invoices found" description="Try adjusting your filters or forward an invoice to your inbox to get started." />
+          <EmptyState icon={FileText} title="No invoices found" description="Connect your inbox or upload invoices to get started." />
         ) : (
           <div className="overflow-auto rounded-lg border">
             <table className="w-full text-sm">
@@ -187,11 +238,12 @@ const Invoices = () => {
                 {paged.map((inv) => {
                   const origCurrency = inv.currency || baseCurrency;
                   const showOriginal = origCurrency !== baseCurrency;
+                  const isArchived = inv.project_id && archivedProjectIds.has(inv.project_id);
                   return (
                     <tr
                       key={inv.id}
                       onClick={() => navigate(`/invoices/${inv.id}`)}
-                      className="border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60"
+                      className={`border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60 ${isArchived ? 'opacity-60' : ''}`}
                     >
                       <td className="p-3 font-medium">{inv.vendor_name}</td>
                       <td className="p-3 text-muted-foreground">{inv.invoice_date}</td>
@@ -203,8 +255,29 @@ const Invoices = () => {
                           <span className="ml-1.5 text-xs text-muted-foreground">({origCurrency} {inv.total?.toLocaleString()})</span>
                         )}
                       </td>
-                      <td className="p-3 text-muted-foreground">{(inv as any).category?.name ?? '—'}</td>
-                      <td className="p-3 text-muted-foreground">{(inv as any).project?.name ?? '—'}</td>
+                      <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                        {(inv as any).category?.name ? (
+                          <span className="text-muted-foreground">{(inv as any).category.name}</span>
+                        ) : (
+                          <Select onValueChange={(v) => assignCategory(inv.id, v)}>
+                            <SelectTrigger className="h-7 w-32 text-xs border-dashed"><SelectValue placeholder="Assign..." /></SelectTrigger>
+                            <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
+                          </Select>
+                        )}
+                      </td>
+                      <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                        {(inv as any).project?.name ? (
+                          <span className="text-muted-foreground flex items-center gap-1.5">
+                            {(inv as any).project.name}
+                            {isArchived && <Archive className="h-3 w-3 text-muted-foreground/60" />}
+                          </span>
+                        ) : (
+                          <Select onValueChange={(v) => assignProject(inv.id, v)}>
+                            <SelectTrigger className="h-7 w-32 text-xs border-dashed"><SelectValue placeholder="Assign..." /></SelectTrigger>
+                            <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                          </Select>
+                        )}
+                      </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
                         <StatusDropdown status={inv.payment_status} onChangeStatus={(s) => changeStatus(inv, s)} />
                       </td>

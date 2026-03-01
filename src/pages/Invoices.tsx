@@ -15,6 +15,8 @@ import { Search, Download, ChevronLeft, ChevronRight, FileText, Archive, Pencil 
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
 
+const CURRENCY = 'GBP';
+
 const PAGE_SIZE = 25;
 
 const Invoices = () => {

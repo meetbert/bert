@@ -10,11 +10,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-import { FileText, DollarSign, FolderOpen, AlertCircle, Clock, CalendarDays, TrendingUp } from 'lucide-react';
-import { CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
+import { FileText, DollarSign, FolderOpen, AlertCircle, Clock, CalendarDays, TrendingUp, AlertTriangle } from 'lucide-react';
+import { CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
+
+const CURRENCY = 'GBP';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -23,7 +26,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('6m');
   const [kpiFilter, setKpiFilter] = useState<string | null>(null);
-  const { baseCurrency } = useUserSettings();
 
   useEffect(() => { fetchData(); }, []);
 
@@ -52,19 +54,19 @@ const Dashboard = () => {
     return d >= now && d <= oneWeekLater;
   });
 
-  // Monthly spend data
+  // Monthly spend data — filter to selected time range
+  const monthsToShow = timeRange === '3m' ? 3 : timeRange === '6m' ? 6 : 12;
+  const cutoffDate = new Date(now.getFullYear(), now.getMonth() - monthsToShow + 1, 1);
+  const cutoffStr = cutoffDate.toISOString().slice(0, 7);
+
   const monthlyMap: Record<string, number> = {};
   invoices.forEach((i) => {
     const month = i.invoice_date?.slice(0, 7) ?? 'Unknown';
-    monthlyMap[month] = (monthlyMap[month] ?? 0) + (i.total ?? 0);
+    if (month >= cutoffStr) {
+      monthlyMap[month] = (monthlyMap[month] ?? 0) + (i.total ?? 0);
+    }
   });
-  let monthlySpend = Object.entries(monthlyMap).sort().map(([month, value]) => ({ month, value }));
-
-  const monthsToShow = timeRange === '3m' ? 3 : timeRange === '6m' ? 6 : 12;
-  if (monthlySpend.length > monthsToShow) {
-    monthlySpend = monthlySpend.slice(-monthsToShow);
-  }
-
+  const monthlySpend = Object.entries(monthlyMap).sort().map(([month, value]) => ({ month, value }));
   const avgMonthly = monthlySpend.length > 0 ? monthlySpend.reduce((s, m) => s + m.value, 0) / monthlySpend.length : 0;
   const monthlyWithBurnRate = monthlySpend.map((m) => ({ ...m, burnRate: Math.round(avgMonthly) }));
 
@@ -121,8 +123,8 @@ const Dashboard = () => {
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary"><Clock className="h-5 w-5 text-muted-foreground" /></div>
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Unpaid</p>
-                  <p className="text-2xl font-bold">{unpaid.length}</p>
-                  <p className="text-xs text-muted-foreground">{formatCurrency(totalUnpaid, baseCurrency)}</p>
+                  <p className="text-sm text-muted-foreground">{unpaid.length} invoice{unpaid.length !== 1 ? 's' : ''}</p>
+                  <p className="text-xl font-bold">{formatCurrency(totalUnpaid, CURRENCY)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -133,8 +135,8 @@ const Dashboard = () => {
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10"><AlertCircle className="h-5 w-5 text-destructive" /></div>
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Overdue</p>
-                  <p className="text-2xl font-bold text-destructive">{overdue.length}</p>
-                  <p className="text-xs text-destructive/80">{formatCurrency(totalOverdue, baseCurrency)}</p>
+                  <p className="text-sm text-destructive/80">{overdue.length} invoice{overdue.length !== 1 ? 's' : ''}</p>
+                  <p className="text-xl font-bold text-destructive">{formatCurrency(totalOverdue, CURRENCY)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -143,7 +145,7 @@ const Dashboard = () => {
             <Card className={`transition-shadow hover:shadow-md ${kpiFilter === 'outstanding' ? 'ring-2 ring-primary' : ''}`}>
               <CardContent className="flex items-center gap-4 p-5">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary"><DollarSign className="h-5 w-5 text-primary" /></div>
-                <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Outstanding</p><p className="text-2xl font-bold">{formatCurrency(totalOutstanding, baseCurrency)}</p></div>
+                <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Outstanding</p><p className="text-xl font-bold">{formatCurrency(totalOutstanding, CURRENCY)}</p></div>
               </CardContent>
             </Card>
           </button>
@@ -175,7 +177,7 @@ const Dashboard = () => {
                         <span className="font-medium">{inv.vendor_name}</span>
                         <StatusBadge status={inv.payment_status} />
                       </div>
-                      <span className="font-medium">{formatCurrency(inv.total ?? 0, baseCurrency)}</span>
+                      <span className="font-medium">{formatCurrency(inv.total ?? 0, CURRENCY)}</span>
                     </Link>
                   ))}
                   {filteredInvoices.length > 10 && (
@@ -192,7 +194,7 @@ const Dashboard = () => {
           <button onClick={() => setKpiFilter('overdue')} className="w-full text-left">
             <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 transition-colors hover:bg-destructive/10">
               <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
-              <p className="text-sm font-medium">{overdue.length} overdue invoice{overdue.length > 1 ? 's' : ''} ({formatCurrency(totalOverdue, baseCurrency)}) require attention</p>
+              <p className="text-sm font-medium">{overdue.length} overdue invoice{overdue.length > 1 ? 's' : ''} ({formatCurrency(totalOverdue, CURRENCY)}) require attention</p>
             </div>
           </button>
         )}
@@ -220,7 +222,7 @@ const Dashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
                     <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-                    <Tooltip formatter={(v: number) => formatCurrency(v, baseCurrency)} />
+                    <RechartsTooltip formatter={(v: number) => formatCurrency(v, CURRENCY)} />
                     <Line type="monotone" dataKey="value" name="Spend" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
                     <Line type="monotone" dataKey="burnRate" name="Avg Burn Rate" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
                   </LineChart>
@@ -230,40 +232,56 @@ const Dashboard = () => {
           </Card>
         )}
 
-        {/* Project budget cards */}
-        {projects.length > 0 && !kpiFilter && (
+        {/* Project budget cards — active only */}
+        {activeProjects.length > 0 && !kpiFilter && (
           <div>
             <h2 className="mb-4 text-lg font-semibold">Project Budgets</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {projects.map((p) => {
+              {activeProjects.map((p) => {
                 const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + (i.total ?? 0), 0);
-                const pct = hasBudget(p) ? Math.min((spent / p.budget!) * 100, 100) : 0;
-                const getBudgetColor = (pct: number) => {
+                const pct = hasBudget(p) ? (spent / p.budget!) * 100 : 0;
+                const isOverBudget = pct > 100;
+                const overAmount = isOverBudget ? spent - p.budget! : 0;
+                const getBudgetColor = () => {
+                  if (pct >= 100) return 'text-destructive';
                   if (pct >= 90) return 'text-destructive';
                   if (pct >= 75) return 'text-amber-500';
                   return 'text-muted-foreground';
                 };
+                const progressValue = Math.min(pct, 100);
+                const progressClass = pct >= 90 ? '[&>div]:bg-destructive' : pct >= 75 ? '[&>div]:bg-amber-500' : '';
+
                 return (
                   <Link key={p.id} to={`/projects/${p.id}`}>
-                    <Card className="cursor-pointer transition-shadow hover:shadow-md">
+                    <Card className={`cursor-pointer transition-shadow hover:shadow-md ${isOverBudget ? 'border-destructive/40' : ''}`}>
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between">
                           <h3 className="font-semibold">{p.name}</h3>
-                          <StatusBadge status={p.status} />
+                          {isOverBudget && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="flex items-center gap-1 text-xs font-medium text-destructive">
+                                  <AlertTriangle className="h-3.5 w-3.5" /> Over budget
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>{formatCurrency(overAmount, CURRENCY)} over budget</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {!isOverBudget && <StatusBadge status={p.status} />}
                         </div>
                         {hasBudget(p) ? (
                           <>
-                            <Progress value={pct} className="mt-3" />
+                            <Progress value={progressValue} className={`mt-3 ${progressClass}`} />
                             <div className="mt-2 flex justify-between text-xs">
-                              <span className="text-muted-foreground">{formatCurrency(spent, baseCurrency)}</span>
-                              <span className={getBudgetColor(pct)}>{Math.round(pct)}% of {formatCurrency(p.budget!, baseCurrency)}</span>
+                              <span className="text-muted-foreground">{formatCurrency(spent, CURRENCY)}</span>
+                              <span className={getBudgetColor()}>{Math.round(pct)}% of {formatCurrency(p.budget!, CURRENCY)}</span>
                             </div>
                           </>
                         ) : (
                           <>
                             <div className="mt-3 h-2 rounded-full border border-dashed border-muted-foreground/30" />
                             <div className="mt-2 flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">{formatCurrency(spent, baseCurrency)} spent</span>
+                              <span className="text-muted-foreground">{formatCurrency(spent, CURRENCY)} spent</span>
                               <span className="text-primary hover:underline">Set budget →</span>
                             </div>
                           </>
@@ -290,7 +308,7 @@ const Dashboard = () => {
                     {overdue.map((inv) => (
                       <Link key={inv.id} to={`/invoices/${inv.id}`} className="flex items-center justify-between rounded-lg border border-destructive/20 p-3 text-sm hover:bg-secondary/50">
                         <span className="font-medium">{inv.vendor_name}</span>
-                        <span className="text-destructive">{formatCurrency(inv.total ?? 0, baseCurrency)}</span>
+                        <span className="text-destructive">{formatCurrency(inv.total ?? 0, CURRENCY)}</span>
                       </Link>
                     ))}
                   </div>
@@ -303,11 +321,13 @@ const Dashboard = () => {
               <CardContent>
                 {(() => {
                   const thirtyDaysLater = new Date(now.getTime() + 30 * 86400000);
-                  const upcoming30 = invoices.filter((i) => {
-                    if (i.payment_status === 'paid' || !i.due_date) return false;
-                    const d = new Date(i.due_date);
-                    return d > now && d <= thirtyDaysLater;
-                  });
+                  const upcoming30 = invoices
+                    .filter((i) => {
+                      if (i.payment_status === 'paid' || !i.due_date) return false;
+                      const d = new Date(i.due_date);
+                      return d > now && d <= thirtyDaysLater;
+                    })
+                    .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''));
                   return upcoming30.length === 0 ? (
                     <EmptyState icon={CalendarDays} title="Nothing due soon" description="No invoices due in the next 30 days." />
                   ) : (
@@ -315,7 +335,10 @@ const Dashboard = () => {
                       {upcoming30.map((inv) => (
                         <Link key={inv.id} to={`/invoices/${inv.id}`} className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-secondary/50">
                           <span className="font-medium">{inv.vendor_name}</span>
-                          <span className="text-muted-foreground">{inv.due_date}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="font-medium">{formatCurrency(inv.total ?? 0, CURRENCY)}</span>
+                            <span className="text-xs text-muted-foreground">{inv.due_date}</span>
+                          </div>
                         </Link>
                       ))}
                     </div>

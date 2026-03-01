@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EmptyState } from '@/components/EmptyState';
 import { toast } from '@/hooks/use-toast';
-import { Search, Download, ChevronLeft, ChevronRight, FileText, Archive } from 'lucide-react';
+import { Search, Download, ChevronLeft, ChevronRight, FileText, Archive, Pencil } from 'lucide-react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
 

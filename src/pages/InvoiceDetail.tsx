@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { ArrowLeft, Pencil, Check, X, Download, User, DollarSign, FolderOpen, Tag, Trash2, Clock } from 'lucide-react';
+import { ArrowLeft, Pencil, Check, X, Download, User, DollarSign, FolderOpen, Tag, Trash2, Clock, FileText } from 'lucide-react';
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -25,17 +25,35 @@ const InvoiceDetail = () => {
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Invoice>>({});
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [documentUrl, setDocumentUrl] = useState<string | null>(null);
 
   const fetchInvoice = async () => {
     if (!id) return;
     const [inv, p, c] = await Promise.all([
-      supabase.from('invoices').select('*, project:projects(*), category:categories(*)').eq('id', id).single(),
+      supabase.from('invoices').select('*').eq('id', id).single(),
       supabase.from('projects').select('*'),
-      supabase.from('categories').select('*'),
+      supabase.from('invoice_categories').select('*'),
     ]);
-    setInvoice(inv.data);
+
+    // Enrich with project/category
+    const projectsMap = new Map((p.data ?? []).map((proj: any) => [proj.id, proj]));
+    const categoriesMap = new Map((c.data ?? []).map((cat: any) => [cat.id, cat]));
+    const enriched = inv.data ? {
+      ...inv.data,
+      project: inv.data.project_id ? projectsMap.get(inv.data.project_id) ?? null : null,
+      category: inv.data.category_id ? categoriesMap.get(inv.data.category_id) ?? null : null,
+    } : null;
+
+    setInvoice(enriched as any);
     setProjects(p.data ?? []);
     setCategories(c.data ?? []);
+
+    // Get signed URL for document
+    if (enriched?.document_path) {
+      const { data } = await supabase.storage.from('invoices-bucket').createSignedUrl(enriched.document_path, 3600);
+      setDocumentUrl(data?.signedUrl ?? null);
+    }
+
     setLoading(false);
   };
 
@@ -80,7 +98,7 @@ const InvoiceDetail = () => {
 
   const assignCategory = async (categoryId: string) => {
     if (!invoice) return;
-    await supabase.from('invoices').update({ category_id: parseInt(categoryId) }).eq('id', invoice.id);
+    await supabase.from('invoices').update({ category_id: categoryId }).eq('id', invoice.id);
     fetchInvoice();
     toast({ title: 'Category assigned' });
   };
@@ -93,12 +111,13 @@ const InvoiceDetail = () => {
     navigate('/invoices');
   };
 
-  // Placeholder activity log entries
   const activityLog = invoice ? [
     { date: invoice.created_at ?? invoice.invoice_date ?? '—', text: 'Invoice created' },
     ...(invoice.payment_status === 'paid' ? [{ date: new Date().toISOString().slice(0, 10), text: 'Marked as paid' }] : []),
     ...(invoice.project_id ? [{ date: new Date().toISOString().slice(0, 10), text: 'Assigned to project' }] : []),
   ] : [];
+
+  const isPdf = invoice?.document_path?.toLowerCase().endsWith('.pdf');
 
   if (loading) return (
     <div className="min-h-screen">
@@ -186,6 +205,41 @@ const InvoiceDetail = () => {
           </div>
         </div>
 
+        {/* Document viewer */}
+        {invoice.document_path && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <FileText className="h-4 w-4" /> Attachment
+              </CardTitle>
+              {documentUrl && (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={documentUrl} target="_blank" rel="noopener noreferrer"><Download className="mr-1 h-4 w-4" /> Download</a>
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {isPdf && documentUrl ? (
+                <iframe
+                  src={documentUrl}
+                  className="h-[600px] w-full rounded-lg border"
+                  title="Invoice PDF"
+                />
+              ) : documentUrl ? (
+                <div className="flex flex-col items-center gap-3 py-8">
+                  <FileText className="h-12 w-12 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Preview not available for this file type.</p>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={documentUrl} target="_blank" rel="noopener noreferrer"><Download className="mr-1 h-4 w-4" /> Download File</a>
+                  </Button>
+                </div>
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">Loading document...</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Detail card */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
@@ -231,20 +285,6 @@ const InvoiceDetail = () => {
             </div>
           </CardContent>
         </Card>
-
-        {/* Document viewer */}
-        {invoice.document_path && (
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Attached Document</span>
-                <Button variant="outline" size="sm" asChild>
-                  <a href={invoice.document_path} target="_blank" rel="noopener noreferrer"><Download className="mr-1 h-4 w-4" /> View / Download</a>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Delete confirmation modal */}
         <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>

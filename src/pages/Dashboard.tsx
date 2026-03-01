@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { Invoice, Project, Category } from '@/types/database';
+import { Invoice, Project } from '@/types/database';
 import { Navbar } from '@/components/Navbar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { toast } from '@/hooks/use-toast';
+
 import { FileText, DollarSign, FolderOpen, AlertCircle, Clock, CalendarDays, TrendingUp } from 'lucide-react';
 import { CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { useUserSettings } from '@/hooks/useUserSettings';
@@ -20,7 +20,6 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('6m');
   const [kpiFilter, setKpiFilter] = useState<string | null>(null);
@@ -29,21 +28,21 @@ const Dashboard = () => {
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
-    const [invRes, projRes, catRes] = await Promise.all([
-      supabase.from('invoices').select('*, project:projects(*), category:categories(*)'),
+    const [invRes, projRes] = await Promise.all([
+      supabase.from('invoices').select('*'),
       supabase.from('projects').select('*'),
-      supabase.from('categories').select('*'),
     ]);
     setInvoices(invRes.data ?? []);
     setProjects(projRes.data ?? []);
-    setCategories(catRes.data ?? []);
     setLoading(false);
   };
 
   const activeProjects = projects.filter((p) => p.status === 'Active');
   const unpaid = invoices.filter((i) => i.payment_status === 'unpaid');
   const overdue = invoices.filter((i) => i.payment_status === 'overdue');
-  const totalOutstanding = [...unpaid, ...overdue].reduce((s, i) => s + (i.total ?? 0), 0);
+  const totalUnpaid = unpaid.reduce((s, i) => s + (i.total ?? 0), 0);
+  const totalOverdue = overdue.reduce((s, i) => s + (i.total ?? 0), 0);
+  const totalOutstanding = totalUnpaid + totalOverdue;
 
   const now = new Date();
   const oneWeekLater = new Date(now.getTime() + 7 * 86400000);
@@ -51,13 +50,6 @@ const Dashboard = () => {
     if (i.payment_status === 'paid' || !i.due_date) return false;
     const d = new Date(i.due_date);
     return d >= now && d <= oneWeekLater;
-  });
-
-  const thirtyDaysLater = new Date(now.getTime() + 30 * 86400000);
-  const upcoming30 = invoices.filter((i) => {
-    if (i.payment_status === 'paid' || !i.due_date) return false;
-    const d = new Date(i.due_date);
-    return d > now && d <= thirtyDaysLater;
   });
 
   // Monthly spend data
@@ -68,31 +60,13 @@ const Dashboard = () => {
   });
   let monthlySpend = Object.entries(monthlyMap).sort().map(([month, value]) => ({ month, value }));
 
-  // Filter by time range
   const monthsToShow = timeRange === '3m' ? 3 : timeRange === '6m' ? 6 : 12;
   if (monthlySpend.length > monthsToShow) {
     monthlySpend = monthlySpend.slice(-monthsToShow);
   }
 
-  // Add placeholder burn-rate line
   const avgMonthly = monthlySpend.length > 0 ? monthlySpend.reduce((s, m) => s + m.value, 0) / monthlySpend.length : 0;
   const monthlyWithBurnRate = monthlySpend.map((m) => ({ ...m, burnRate: Math.round(avgMonthly) }));
-
-  // Budget utilisation data
-  const budgetData = projects
-    .filter((p) => p.budget != null && p.budget > 0)
-    .map((p) => {
-      const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + (i.total ?? 0), 0);
-      const pct = Math.min(Math.round((spent / p.budget!) * 100), 100);
-      return { name: p.name, pct, spent, budget: p.budget! };
-    })
-    .sort((a, b) => b.pct - a.pct);
-
-  const getBudgetColor = (pct: number) => {
-    if (pct >= 90) return 'hsl(0, 100%, 65%)';
-    if (pct >= 75) return 'hsl(38, 92%, 50%)';
-    return 'hsl(var(--foreground))';
-  };
 
   // Filtered invoice list based on KPI click
   const getFilteredInvoices = () => {
@@ -104,16 +78,6 @@ const Dashboard = () => {
   };
 
   const filteredInvoices = getFilteredInvoices();
-
-  const assignProject = async (invoiceId: string, projectId: string) => {
-    const { error } = await supabase.from('invoices').update({ project_id: projectId }).eq('id', invoiceId);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      fetchData();
-      toast({ title: 'Assigned', description: 'Invoice assigned to project.' });
-    }
-  };
 
   const hasBudget = (p: Project) => p.budget != null && p.budget > 0;
 
@@ -141,7 +105,7 @@ const Dashboard = () => {
       <div className="container space-y-8 py-8">
         <h1 className="text-2xl font-bold">Dashboard</h1>
 
-        {/* KPI Row - Clickable cards */}
+        {/* KPI Row */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <button onClick={() => setKpiFilter(null)} className="text-left">
             <Card className={`transition-shadow hover:shadow-md ${kpiFilter === null ? 'ring-2 ring-primary' : ''}`}>
@@ -155,7 +119,11 @@ const Dashboard = () => {
             <Card className={`transition-shadow hover:shadow-md ${kpiFilter === 'unpaid' ? 'ring-2 ring-primary' : ''}`}>
               <CardContent className="flex items-center gap-4 p-5">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary"><Clock className="h-5 w-5 text-muted-foreground" /></div>
-                <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Unpaid</p><p className="text-2xl font-bold">{unpaid.length}</p></div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Unpaid</p>
+                  <p className="text-2xl font-bold">{unpaid.length}</p>
+                  <p className="text-xs text-muted-foreground">{formatCurrency(totalUnpaid, baseCurrency)}</p>
+                </div>
               </CardContent>
             </Card>
           </button>
@@ -163,7 +131,11 @@ const Dashboard = () => {
             <Card className={`transition-shadow hover:shadow-md ${kpiFilter === 'overdue' ? 'ring-2 ring-primary' : ''}`}>
               <CardContent className="flex items-center gap-4 p-5">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10"><AlertCircle className="h-5 w-5 text-destructive" /></div>
-                <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Overdue</p><p className="text-2xl font-bold text-destructive">{overdue.length}</p></div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Overdue</p>
+                  <p className="text-2xl font-bold text-destructive">{overdue.length}</p>
+                  <p className="text-xs text-destructive/80">{formatCurrency(totalOverdue, baseCurrency)}</p>
+                </div>
               </CardContent>
             </Card>
           </button>
@@ -220,14 +192,13 @@ const Dashboard = () => {
           <button onClick={() => setKpiFilter('overdue')} className="w-full text-left">
             <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 transition-colors hover:bg-destructive/10">
               <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
-              <p className="text-sm font-medium">{overdue.length} overdue invoice{overdue.length > 1 ? 's' : ''} require attention</p>
+              <p className="text-sm font-medium">{overdue.length} overdue invoice{overdue.length > 1 ? 's' : ''} ({formatCurrency(totalOverdue, baseCurrency)}) require attention</p>
             </div>
           </button>
         )}
 
-        {/* Charts row */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Monthly Spend Chart */}
+        {/* Monthly Spend Chart */}
+        {!kpiFilter && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-sm">Monthly Spend</CardTitle>
@@ -257,38 +228,7 @@ const Dashboard = () => {
               )}
             </CardContent>
           </Card>
-
-          {/* Budget Utilisation */}
-          <Card>
-            <CardHeader><CardTitle className="text-sm">Budget Utilisation</CardTitle></CardHeader>
-            <CardContent>
-              {budgetData.length === 0 ? (
-                <EmptyState icon={FolderOpen} title="No budgets set" description="Set budgets on your projects to track utilisation." />
-              ) : (
-                <div className="space-y-4">
-                  {budgetData.map((p) => (
-                    <div key={p.name}>
-                      <div className="mb-1 flex items-center justify-between text-sm">
-                        <span className="font-medium">{p.name}</span>
-                        <span className="text-xs text-muted-foreground" style={{ color: getBudgetColor(p.pct) }}>{p.pct}%</span>
-                      </div>
-                      <div className="h-3 w-full overflow-hidden rounded-full bg-secondary">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{ width: `${p.pct}%`, backgroundColor: getBudgetColor(p.pct) }}
-                        />
-                      </div>
-                      <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                        <span>{formatCurrency(p.spent, baseCurrency)}</span>
-                        <span>of {formatCurrency(p.budget, baseCurrency)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        )}
 
         {/* Project budget cards */}
         {projects.length > 0 && !kpiFilter && (
@@ -298,6 +238,11 @@ const Dashboard = () => {
               {projects.map((p) => {
                 const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + (i.total ?? 0), 0);
                 const pct = hasBudget(p) ? Math.min((spent / p.budget!) * 100, 100) : 0;
+                const getBudgetColor = (pct: number) => {
+                  if (pct >= 90) return 'text-destructive';
+                  if (pct >= 75) return 'text-amber-500';
+                  return 'text-muted-foreground';
+                };
                 return (
                   <Link key={p.id} to={`/projects/${p.id}`}>
                     <Card className="cursor-pointer transition-shadow hover:shadow-md">
@@ -309,9 +254,9 @@ const Dashboard = () => {
                         {hasBudget(p) ? (
                           <>
                             <Progress value={pct} className="mt-3" />
-                            <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                              <span>{formatCurrency(spent, baseCurrency)}</span>
-                              <span>of {formatCurrency(p.budget!, baseCurrency)}</span>
+                            <div className="mt-2 flex justify-between text-xs">
+                              <span className="text-muted-foreground">{formatCurrency(spent, baseCurrency)}</span>
+                              <span className={getBudgetColor(pct)}>{Math.round(pct)}% of {formatCurrency(p.budget!, baseCurrency)}</span>
                             </div>
                           </>
                         ) : (
@@ -335,7 +280,6 @@ const Dashboard = () => {
         {/* Upcoming & Overdue */}
         {!kpiFilter && (
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Overdue */}
             <Card>
               <CardHeader><CardTitle className="text-sm text-destructive">Overdue</CardTitle></CardHeader>
               <CardContent>
@@ -354,64 +298,37 @@ const Dashboard = () => {
               </CardContent>
             </Card>
 
-            {/* Upcoming 30 days */}
             <Card>
               <CardHeader><CardTitle className="text-sm">Upcoming (30 days)</CardTitle></CardHeader>
               <CardContent>
-                {upcoming30.length === 0 ? (
-                  <EmptyState icon={CalendarDays} title="Nothing due soon" description="No invoices due in the next 30 days." />
-                ) : (
-                  <div className="space-y-2">
-                    {upcoming30.map((inv) => (
-                      <Link key={inv.id} to={`/invoices/${inv.id}`} className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-secondary/50">
-                        <span className="font-medium">{inv.vendor_name}</span>
-                        <span className="text-muted-foreground">{inv.due_date}</span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
+                {(() => {
+                  const thirtyDaysLater = new Date(now.getTime() + 30 * 86400000);
+                  const upcoming30 = invoices.filter((i) => {
+                    if (i.payment_status === 'paid' || !i.due_date) return false;
+                    const d = new Date(i.due_date);
+                    return d > now && d <= thirtyDaysLater;
+                  });
+                  return upcoming30.length === 0 ? (
+                    <EmptyState icon={CalendarDays} title="Nothing due soon" description="No invoices due in the next 30 days." />
+                  ) : (
+                    <div className="space-y-2">
+                      {upcoming30.map((inv) => (
+                        <Link key={inv.id} to={`/invoices/${inv.id}`} className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-secondary/50">
+                          <span className="font-medium">{inv.vendor_name}</span>
+                          <span className="text-muted-foreground">{inv.due_date}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* Unassigned invoices */}
-        {!kpiFilter && invoices.filter((i) => !i.project_id).length > 0 && (
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Unassigned Invoices</CardTitle></CardHeader>
-            <CardContent>
-              <div className="overflow-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="pb-2 pr-4">Vendor</th><th className="pb-2 pr-4">Date</th><th className="pb-2 pr-4">Total</th><th className="pb-2 pr-4">Category</th><th className="pb-2">Assign Project</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {invoices.filter((i) => !i.project_id).map((inv) => (
-                      <tr key={inv.id} className="border-b last:border-0 hover:bg-secondary/50">
-                        <td className="py-2 pr-4 font-medium">{inv.vendor_name}</td>
-                        <td className="py-2 pr-4">{inv.invoice_date}</td>
-                        <td className="py-2 pr-4">{formatCurrency(inv.total ?? 0, baseCurrency)}</td>
-                        <td className="py-2 pr-4">{(inv as any).category?.name ?? '—'}</td>
-                        <td className="py-2">
-                          <Select onValueChange={(v) => assignProject(inv.id, v)}>
-                            <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Select project" /></SelectTrigger>
-                            <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                          </Select>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Empty state */}
         {invoices.length === 0 && (
-          <EmptyState icon={FileText} title="No invoices yet" description="Forward an invoice to your connected inbox to get started." />
+          <EmptyState icon={FileText} title="No invoices yet" description="Connect your inbox or upload invoices to get started." />
         )}
       </div>
     </div>

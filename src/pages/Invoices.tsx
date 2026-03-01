@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
 import { Navbar } from '@/components/Navbar';
 import { StatusDropdown } from '@/components/StatusDropdown';
-import { StatusBadge } from '@/components/StatusBadge';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';

@@ -81,7 +81,7 @@ const Invoices = () => {
       result = result.filter((i) => i.vendor_name?.toLowerCase().includes(q) || i.invoice_number?.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q));
     }
     if (filterProject !== 'all') result = result.filter((i) => i.project_id === filterProject);
-    if (filterCategory !== 'all') result = result.filter((i) => i.category_id === filterCategory);
+    if (filterCategory !== 'all') result = result.filter((i) => String(i.category_id) === filterCategory);
     if (filterStatus !== 'all') result = result.filter((i) => i.payment_status === filterStatus);
     result.sort((a, b) => {
       if (sort === 'newest') return (b.invoice_date ?? '').localeCompare(a.invoice_date ?? '');

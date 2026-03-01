@@ -57,7 +57,7 @@ const Invoices = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const activeProjects = useMemo(() => projects.filter(p => p.status === 'Active'), [projects]);
+  
   const archivedProjects = useMemo(() => projects.filter(p => p.status === 'Completed'), [projects]);
   const archivedProjectIds = useMemo(() => new Set(archivedProjects.map(p => p.id)), [archivedProjects]);
 

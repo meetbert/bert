@@ -47,6 +47,9 @@ ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    # Also accept any localhost / 127.0.0.1 port so the dev server always works
+    # regardless of which port Vite binds to.
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

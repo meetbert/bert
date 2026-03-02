@@ -8,25 +8,31 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { ExternalLink, Plus, LogOut, Pencil, Trash2, RefreshCw, Wifi, CheckCircle2 } from 'lucide-react';
+import { Copy, ExternalLink, Plus, LogOut, Pencil, Trash2, CheckCircle2, Mail } from 'lucide-react';
 import { SUPPORTED_CURRENCIES, currencySymbol } from '@/lib/currency';
 
+const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
+
 const Settings = () => {
-  const { user, signOut } = useAuth();
+  const { user, session, signOut } = useAuth();
   const navigate = useNavigate();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Inbox form
-  const [emailProvider, setEmailProvider] = useState('gmail');
-  const [emailAddress, setEmailAddress] = useState('');
-  const [testingConnection, setTestingConnection] = useState(false);
+  // Meetbert.uk inbox
+  const [inboxAddress, setInboxAddress] = useState<string | null>(null);
+  const [inboxActive, setInboxActive] = useState(false);
+  const [creatingInbox, setCreatingInbox] = useState(false);
+  const [disconnectingInbox, setDisconnectingInbox] = useState(false);
+
+  // Gmail OAuth
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [gmailEmail, setGmailEmail] = useState<string | null>(null);
+  const [disconnectingGmail, setDisconnectingGmail] = useState(false);
 
   // Category form
   const [newCategory, setNewCategory] = useState('');
@@ -37,36 +43,117 @@ const Settings = () => {
   // Currency
   const [baseCurrency, setBaseCurrency] = useState('EUR');
 
+  /** Authenticated fetch to the FastAPI backend. */
+  const apiFetch = (path: string, options: RequestInit = {}) => {
+    const token = session?.access_token;
+    return fetch(`${BACKEND}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers ?? {}),
+      },
+    });
+  };
+
   useEffect(() => {
     if (!user) return;
+
+    // Detect ?gmail_connected=true redirect from OAuth
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('gmail_connected') === 'true') {
+      toast({ title: 'Gmail connected', description: 'Your Gmail account is now linked.' });
+      window.history.replaceState({}, '', '/settings');
+    }
+
+    // Supabase queries — must complete before rendering
     Promise.all([
       supabase.from('user_settings').select('*').eq('id', user.id).single(),
       supabase.from('invoice_categories').select('*').order('name'),
-    ]).then(([s, c]) => {
+      supabase.from('user_gmail_tokens').select('gmail_email').eq('user_id', user.id).maybeSingle(),
+    ]).then(([s, c, g]) => {
       if (s.data) {
         setSettings(s.data as any);
-        setEmailAddress(s.data.email_address ?? '');
-        setEmailProvider(s.data.email_provider ?? 'gmail');
         setBaseCurrency(s.data.base_currency ?? 'EUR');
       }
       setCategories(c.data ?? []);
+      setGmailConnected(!!g.data);
+      setGmailEmail(g.data?.gmail_email ?? null);
       setLoading(false);
     });
+
+    // Backend inbox fetch — independent, failure must not block the page
+    apiFetch('/api/inbox')
+      .then(async (resp) => {
+        if (resp.ok) {
+          const data = await resp.json();
+          setInboxAddress(data?.address ?? null);
+          setInboxActive(data?.active ?? false);
+        }
+      })
+      .catch(() => { /* backend unavailable — inbox section stays in "not created" state */ });
   }, [user]);
 
-  const saveInbox = async () => {
-    if (!user) return;
-    const { error } = await supabase.from('user_settings').upsert({ id: user.id, email_address: emailAddress, email_provider: emailProvider });
-    if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    toast({ title: 'Saved' });
+  const createInbox = async () => {
+    setCreatingInbox(true);
+    try {
+      const resp = await apiFetch('/api/inbox', { method: 'POST' });
+      const data = await resp.json();
+      if (!resp.ok) {
+        toast({ title: 'Error', description: data.detail ?? 'Could not create inbox.', variant: 'destructive' });
+        return;
+      }
+      setInboxAddress(data.address);
+      setInboxActive(true);
+      if (data.is_new) {
+        toast({ title: 'Inbox created!', description: `Your address is ${data.address}` });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Could not reach server.', variant: 'destructive' });
+    } finally {
+      setCreatingInbox(false);
+    }
   };
 
-  const testConnection = async () => {
-    setTestingConnection(true);
-    // Placeholder — would call an edge function
-    await new Promise((r) => setTimeout(r, 1500));
-    setTestingConnection(false);
-    toast({ title: 'Connection test', description: 'Backend required: No test endpoint configured yet.' });
+  const disconnectInbox = async () => {
+    setDisconnectingInbox(true);
+    try {
+      const resp = await apiFetch('/api/inbox', { method: 'DELETE' });
+      if (resp.ok) {
+        setInboxActive(false);
+        toast({ title: 'Inbox disconnected' });
+      } else {
+        toast({ title: 'Error', description: 'Could not disconnect inbox.', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Could not reach server.', variant: 'destructive' });
+    } finally {
+      setDisconnectingInbox(false);
+    }
+  };
+
+  const disconnectGmail = async () => {
+    setDisconnectingGmail(true);
+    try {
+      const resp = await apiFetch('/api/auth/gmail', { method: 'DELETE' });
+      if (resp.ok) {
+        setGmailConnected(false);
+        setGmailEmail(null);
+        toast({ title: 'Gmail disconnected' });
+      } else {
+        toast({ title: 'Error', description: 'Could not disconnect Gmail.', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Could not reach server.', variant: 'destructive' });
+    } finally {
+      setDisconnectingGmail(false);
+    }
+  };
+
+  const copyInbox = () => {
+    if (!inboxAddress) return;
+    navigator.clipboard.writeText(inboxAddress);
+    toast({ title: 'Copied', description: inboxAddress });
   };
 
   const refreshCategories = async () => {
@@ -120,56 +207,97 @@ const Settings = () => {
       <div className="container max-w-2xl space-y-6 py-8">
         <h1 className="text-2xl font-bold">Settings</h1>
 
-        {/* Inbox */}
+        {/* ── Connect Inbox (merged primary + optional Gmail) ─────────── */}
         <Card>
-          <CardHeader><CardTitle className="text-sm">Inbox Settings</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">Last synced: —</p>
-              <Button variant="outline" size="sm" onClick={testConnection} disabled={testingConnection}>
-                {testingConnection ? <RefreshCw className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Wifi className="mr-1 h-3.5 w-3.5" />}
-                Test Connection
-              </Button>
-            </div>
-            <RadioGroup value={emailProvider} onValueChange={setEmailProvider} className="flex gap-4">
-              {['gmail', 'outlook', 'other'].map((p) => (
-                <div key={p} className="flex items-center gap-2">
-                  <RadioGroupItem value={p} id={`s-${p}`} />
-                  <Label htmlFor={`s-${p}`} className="capitalize">{p === 'other' ? 'Other (IMAP)' : p}</Label>
-                </div>
-              ))}
-            </RadioGroup>
-            <div className="space-y-2">
-              <Label>Email address</Label>
-              <Input value={emailAddress} onChange={(e) => setEmailAddress(e.target.value)} />
-            </div>
+          <CardHeader>
+            <CardTitle className="text-sm">Connect Inbox</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
 
-            {emailProvider === 'gmail' ? (
-              <div className="rounded-lg border bg-secondary/30 p-4 space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  Gmail connected via OAuth2
-                </div>
+            {/* Option 1 — Dedicated @meetbert.uk inbox */}
+            <div className="space-y-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Dedicated inbox</p>
+              {inboxAddress && inboxActive ? (
+                <>
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    Connected
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg border bg-secondary/30 px-3 py-2">
+                    <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="flex-1 font-mono text-sm">{inboxAddress}</span>
+                    <button onClick={copyInbox} className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground" title="Copy">
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Share this with vendors — invoices land directly in your dashboard.</p>
+                  <Button size="sm" variant="outline" onClick={disconnectInbox} disabled={disconnectingInbox}>
+                    {disconnectingInbox ? 'Disconnecting…' : 'Disconnect'}
+                  </Button>
+                </>
+              ) : gmailConnected ? (
                 <p className="text-xs text-muted-foreground">
-                  Gmail access is authorised at the server level using OAuth2 — no password needed.
-                  If you need to re-authorise (e.g. after revoking access), use the link below.
+                  Disconnect Gmail below to use a dedicated inbox instead.
                 </p>
-                <a
-                  href="http://localhost:8000/api/auth/gmail/authorize"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-                >
-                  Re-authorise Gmail access <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-            ) : null}
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Get a <strong>@meetbert.uk</strong> address. Give it to vendors — no Gmail connection needed.
+                  </p>
+                  {inboxAddress ? (
+                    // Previously had one, reactivate it
+                    <Button size="sm" onClick={createInbox} disabled={creatingInbox}>
+                      {creatingInbox ? 'Reconnecting…' : `Reconnect ${inboxAddress}`}
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={createInbox} disabled={creatingInbox}>
+                      {creatingInbox ? 'Creating…' : 'Create my invoice inbox'}
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
 
-            <Button size="sm" onClick={saveInbox}>Save</Button>
+            <div className="border-t" />
+
+            {/* Option 2 — Gmail (secondary) */}
+            <div className="space-y-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Gmail <span className="normal-case font-normal">(alternative)</span>
+              </p>
+              {gmailConnected ? (
+                <>
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    Connected{gmailEmail ? ` as ${gmailEmail}` : ' via OAuth2'}
+                  </div>
+                  <Button size="sm" variant="outline" onClick={disconnectGmail} disabled={disconnectingGmail}>
+                    {disconnectingGmail ? 'Disconnecting…' : 'Disconnect'}
+                  </Button>
+                </>
+              ) : inboxActive ? (
+                <p className="text-xs text-muted-foreground">
+                  Disconnect your @meetbert.uk inbox above to connect Gmail instead.
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Connect your personal Gmail so Bert can scan your inbox for invoice emails.
+                  </p>
+                  <a
+                    href={`${BACKEND}/api/auth/gmail/authorize?user_id=${user?.id}`}
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    Connect Gmail <ExternalLink className="h-3 w-3" />
+                  </a>
+                </>
+              )}
+            </div>
+
           </CardContent>
         </Card>
 
-        {/* Currency */}
+        {/* ── Currency ────────────────────────────────────────────────── */}
         <Card>
           <CardHeader><CardTitle className="text-sm">Base Currency</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -191,6 +319,7 @@ const Settings = () => {
           </CardContent>
         </Card>
 
+        {/* ── Project Management ──────────────────────────────────────── */}
         <Card>
           <CardHeader><CardTitle className="text-sm">Project Management</CardTitle></CardHeader>
           <CardContent>
@@ -198,7 +327,7 @@ const Settings = () => {
           </CardContent>
         </Card>
 
-        {/* Categories */}
+        {/* ── Categories ──────────────────────────────────────────────── */}
         <Card>
           <CardHeader><CardTitle className="text-sm">Categories</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -246,7 +375,7 @@ const Settings = () => {
           </CardContent>
         </Card>
 
-        {/* Re-run onboarding */}
+        {/* ── Onboarding ──────────────────────────────────────────────── */}
         <Card>
           <CardHeader><CardTitle className="text-sm">Onboarding</CardTitle></CardHeader>
           <CardContent>
@@ -254,7 +383,7 @@ const Settings = () => {
           </CardContent>
         </Card>
 
-        {/* Account */}
+        {/* ── Account ─────────────────────────────────────────────────── */}
         <Card>
           <CardHeader><CardTitle className="text-sm">Account</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -263,7 +392,7 @@ const Settings = () => {
           </CardContent>
         </Card>
 
-        {/* Delete category confirmation */}
+        {/* ── Delete category confirmation ─────────────────────────────── */}
         <Dialog open={!!deleteCategoryId} onOpenChange={() => setDeleteCategoryId(null)}>
           <DialogContent>
             <DialogHeader><DialogTitle>Delete category?</DialogTitle></DialogHeader>

@@ -23,6 +23,7 @@ from googleapiclient.discovery import build
 
 from app.services.invoice_processor import process_document
 from app.db.crud import (
+    get_gmail_token,
     get_projects,
     get_vendor_map,
     insert_invoice,
@@ -43,25 +44,24 @@ ATTACHMENTS_DIR.mkdir(exist_ok=True)
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
-def _get_credentials() -> Credentials:
+def _get_credentials(user_id: str) -> Credentials:
     """
-    Build OAuth2 credentials from environment variables.
+    Build OAuth2 credentials for a specific user from the database.
     Automatically refreshes the access token if expired.
     """
     client_id     = os.getenv("GMAIL_CLIENT_ID")
     client_secret = os.getenv("GMAIL_CLIENT_SECRET")
-    refresh_token = os.getenv("GMAIL_REFRESH_TOKEN")
 
     if not client_id or not client_secret:
         raise ValueError(
-            "GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET must be set in .env. "
-            "Copy the values from your client_secret_*.json file."
+            "GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET must be set in .env."
         )
+
+    refresh_token = get_gmail_token(user_id)
     if not refresh_token:
         raise ValueError(
-            "GMAIL_REFRESH_TOKEN is not set. "
-            "Visit http://localhost:8000/api/auth/gmail/authorize to complete "
-            "the one-time OAuth2 setup and get your refresh token."
+            f"No Gmail token found for user {user_id}. "
+            "The user must connect their Gmail account first via Settings."
         )
 
     creds = Credentials(
@@ -76,8 +76,8 @@ def _get_credentials() -> Credentials:
     return creds
 
 
-def _get_gmail_service():
-    return build("gmail", "v1", credentials=_get_credentials())
+def _get_gmail_service(user_id: str):
+    return build("gmail", "v1", credentials=_get_credentials(user_id))
 
 
 # ── Email parsing helpers ─────────────────────────────────────────────────────
@@ -180,6 +180,7 @@ def _process_message(
     project_names: list[str],
     vendor_map: dict[str, str],
     active_projects: list[dict],
+    user_id: str,
 ) -> tuple[int, int, list[dict]]:
     """
     Fetch and process one Gmail message.
@@ -229,7 +230,7 @@ def _process_message(
             invoice_data["project"] = mapped
 
         detected += 1
-        row = insert_invoice(invoice_data)
+        row = insert_invoice(invoice_data, user_id)
         if row is not None:
             inserted.append(row)
 
@@ -245,7 +246,7 @@ def _process_message(
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def fetch_invoices_from_gmail(max_emails: int = 50) -> dict:
+def fetch_invoices_from_gmail(user_id: str, max_emails: int = 50) -> dict:
     """
     Connect to Gmail via OAuth2, process unread inbox emails, insert invoices.
 
@@ -258,7 +259,7 @@ def fetch_invoices_from_gmail(max_emails: int = 50) -> dict:
     seed_categories()
 
     try:
-        projects        = get_projects()
+        projects        = get_projects(user_id)
         active_projects = [p for p in projects if p.get("status") == "Active"]
         project_names   = [p["name"] for p in active_projects]
         log.info("Active projects: %s", project_names or "(none)")
@@ -274,7 +275,7 @@ def fetch_invoices_from_gmail(max_emails: int = 50) -> dict:
         log.warning("Could not load vendor map: %s", e)
         vendor_map = {}
 
-    service = _get_gmail_service()
+    service = _get_gmail_service(user_id)
 
     results  = (
         service.users()
@@ -294,7 +295,7 @@ def fetch_invoices_from_gmail(max_emails: int = 50) -> dict:
         msg_id = msg_meta["id"]
         try:
             found, detected, inserted = _process_message(
-                service, msg_id, project_names, vendor_map, active_projects
+                service, msg_id, project_names, vendor_map, active_projects, user_id
             )
             total_found    += found
             total_detected += detected

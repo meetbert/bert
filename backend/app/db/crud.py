@@ -5,16 +5,11 @@
 # This layer only talks to the database.
 
 import logging
-import os
 from typing import Optional
 
 from app.db.database import supabase
 
 logger = logging.getLogger(__name__)
-
-# Single-user deployment: every insert is attributed to this user.
-# Set SUPABASE_USER_ID in .env (find your UUID in Supabase Dashboard → Auth → Users).
-_USER_ID = os.getenv("SUPABASE_USER_ID", "")
 
 # ── Status normalisation ────────────────────────────────────────────────────
 
@@ -47,6 +42,138 @@ def _to_date(v) -> Optional[str]:
     return str(v).strip() if v and str(v).strip() else None
 
 
+# ── Gmail tokens (per-user) ─────────────────────────────────────────────────
+
+def save_gmail_token(user_id: str, refresh_token: str, gmail_email: str = None) -> None:
+    """Upsert a Gmail refresh token for a user."""
+    row = {"user_id": user_id, "refresh_token": refresh_token}
+    if gmail_email:
+        row["gmail_email"] = gmail_email
+    try:
+        supabase.table("user_gmail_tokens").upsert(row, on_conflict="user_id").execute()
+        logger.info("Gmail token saved for user %s", user_id)
+    except Exception as e:
+        logger.error("Failed to save Gmail token for user %s: %s", user_id, e)
+        raise
+
+
+def get_gmail_token(user_id: str) -> Optional[str]:
+    """Return the Gmail refresh token for a user, or None if not connected."""
+    try:
+        response = (
+            supabase.table("user_gmail_tokens")
+            .select("refresh_token")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return response.data[0]["refresh_token"] if response.data else None
+    except Exception as e:
+        logger.error("Failed to get Gmail token for user %s: %s", user_id, e)
+        return None
+
+
+def delete_gmail_token(user_id: str) -> None:
+    """Remove a user's Gmail token, disconnecting their Gmail integration."""
+    try:
+        supabase.table("user_gmail_tokens").delete().eq("user_id", user_id).execute()
+        logger.info("Gmail token deleted for user %s", user_id)
+    except Exception as e:
+        logger.error("Failed to delete Gmail token for user %s: %s", user_id, e)
+        raise
+
+
+def get_gmail_connection(user_id: str) -> Optional[dict]:
+    """Return gmail_email and connected_at for a user, or None if not connected."""
+    try:
+        response = (
+            supabase.table("user_gmail_tokens")
+            .select("gmail_email, connected_at")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+    except Exception:
+        return None
+
+
+# ── User inboxes (meetbert.uk) ──────────────────────────────────────────────
+
+def get_user_inbox(user_id: str) -> Optional[dict]:
+    """Return the meetbert.uk inbox record for a user, or None."""
+    try:
+        response = (
+            supabase.table("user_inboxes")
+            .select("user_id, address, created_at, active")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error("Failed to get inbox for user %s: %s", user_id, e)
+        return None
+
+
+def create_user_inbox(user_id: str, address: str) -> dict:
+    """Insert a new meetbert.uk inbox record for a user."""
+    response = (
+        supabase.table("user_inboxes")
+        .insert({"user_id": user_id, "address": address})
+        .execute()
+    )
+    logger.info("Created inbox %s for user %s", address, user_id)
+    return response.data[0] if response.data else {"user_id": user_id, "address": address}
+
+
+def deactivate_user_inbox(user_id: str) -> None:
+    """Set a user's inbox to inactive (preserves the address for future reactivation)."""
+    try:
+        supabase.table("user_inboxes").update({"active": False}).eq("user_id", user_id).execute()
+        logger.info("Inbox deactivated for user %s", user_id)
+    except Exception as e:
+        logger.error("Failed to deactivate inbox for user %s: %s", user_id, e)
+        raise
+
+
+def reactivate_user_inbox(user_id: str) -> None:
+    """Re-enable a previously deactivated inbox."""
+    try:
+        supabase.table("user_inboxes").update({"active": True}).eq("user_id", user_id).execute()
+        logger.info("Inbox reactivated for user %s", user_id)
+    except Exception as e:
+        logger.error("Failed to reactivate inbox for user %s: %s", user_id, e)
+        raise
+
+
+def inbox_address_taken(address: str) -> bool:
+    """Return True if an inbox address is already assigned to any user."""
+    try:
+        response = (
+            supabase.table("user_inboxes")
+            .select("user_id")
+            .eq("address", address)
+            .execute()
+        )
+        return bool(response.data)
+    except Exception:
+        return False
+
+
+def get_user_id_by_inbox(address: str) -> Optional[str]:
+    """Return user_id for the given active inbox address, or None."""
+    try:
+        response = (
+            supabase.table("user_inboxes")
+            .select("user_id")
+            .eq("address", address.lower())
+            .eq("active", True)
+            .execute()
+        )
+        return response.data[0]["user_id"] if response.data else None
+    except Exception as e:
+        logger.error("Failed to lookup inbox %s: %s", address, e)
+        return None
+
+
 # ── Categories ──────────────────────────────────────────────────────────────
 
 def seed_categories() -> None:
@@ -72,21 +199,23 @@ def get_category_id(category_name: str) -> Optional[str]:
 
 # ── Projects ────────────────────────────────────────────────────────────────
 
-def get_project_id(project_name: str) -> Optional[str]:
+def get_project_id(project_name: str, user_id: str) -> Optional[str]:
     response = (
         supabase.table("projects")
         .select("id")
         .eq("name", project_name)
+        .eq("user_id", user_id)
         .execute()
     )
     return response.data[0]["id"] if response.data else None
 
 
-def get_projects() -> list[dict]:
-    """Return all projects ordered by name, including AI-matching hints."""
+def get_projects(user_id: str) -> list[dict]:
+    """Return all projects for a user, ordered by name."""
     response = (
         supabase.table("projects")
         .select("id, name, budget, status, description, known_vendors, known_locations")
+        .eq("user_id", user_id)
         .order("name")
         .execute()
     )
@@ -104,18 +233,13 @@ def get_projects() -> list[dict]:
     ]
 
 
-def add_project(name: str, budget: float, status: str = "Active") -> dict:
-    if not _USER_ID:
-        raise ValueError(
-            "SUPABASE_USER_ID is not set in .env — "
-            "find your UUID in Supabase Dashboard → Authentication → Users."
-        )
+def add_project(name: str, budget: float, user_id: str, status: str = "Active") -> dict:
     response = (
         supabase.table("projects")
-        .insert({"name": name, "budget": budget, "status": status, "user_id": _USER_ID})
+        .insert({"name": name, "budget": budget, "status": status, "user_id": user_id})
         .execute()
     )
-    logger.info("Added project: %s (budget=%s)", name, budget)
+    logger.info("Added project: %s (budget=%s, user=%s)", name, budget, user_id)
     return response.data[0] if response.data else {}
 
 
@@ -137,8 +261,8 @@ def delete_project(project_id: str) -> None:
 
 # ── Invoices ────────────────────────────────────────────────────────────────
 
-def is_duplicate(data: dict) -> bool:
-    """Check whether this invoice already exists (vendor + invoice# + total)."""
+def is_duplicate(data: dict, user_id: str) -> bool:
+    """Check whether this invoice already exists for this user."""
     vendor     = str(data.get("vendor", "")).strip()
     inv_number = str(data.get("invoice_number", "")).strip()
 
@@ -148,6 +272,7 @@ def is_duplicate(data: dict) -> bool:
     response = (
         supabase.table("invoices")
         .select("total")
+        .eq("user_id", user_id)
         .ilike("vendor_name", vendor)
         .eq("invoice_number", inv_number)
         .execute()
@@ -157,7 +282,7 @@ def is_duplicate(data: dict) -> bool:
 
     total = _to_float(data.get("total"))
     if total is None:
-        return True  # same vendor+invoice# with no total → treat as duplicate
+        return True
 
     for row in response.data:
         row_total = _to_float(row.get("total"))
@@ -167,29 +292,21 @@ def is_duplicate(data: dict) -> bool:
     return False
 
 
-def insert_invoice(data: dict) -> Optional[dict]:
+def insert_invoice(data: dict, user_id: str) -> Optional[dict]:
     """
-    Insert one invoice into Supabase.
-    Maps the flat dict from invoice_processor to DB column names.
+    Insert one invoice into Supabase for a specific user.
     Returns the inserted row, or None if duplicate.
     """
-    if not _USER_ID:
-        raise ValueError(
-            "SUPABASE_USER_ID is not set in .env — "
-            "find your UUID in Supabase Dashboard → Authentication → Users."
-        )
-
-    if is_duplicate(data):
+    if is_duplicate(data, user_id):
         logger.info(
             "Duplicate skipped: vendor=%s inv=%s",
             data.get("vendor"), data.get("invoice_number"),
         )
         return None
 
-    # Resolve foreign keys
     project_name = data.get("project", "Unassigned")
     project_id = (
-        get_project_id(project_name)
+        get_project_id(project_name, user_id)
         if project_name and project_name != "Unassigned"
         else None
     )
@@ -199,7 +316,7 @@ def insert_invoice(data: dict) -> Optional[dict]:
     db_status  = _STATUS_TO_DB.get(raw_status, "unpaid")
 
     row = {
-        "user_id":           _USER_ID,
+        "user_id":           user_id,
         "vendor_name":       data.get("vendor") or None,
         "invoice_date":      _to_date(data.get("date")),
         "invoice_number":    data.get("invoice_number") or None,
@@ -220,7 +337,8 @@ def insert_invoice(data: dict) -> Optional[dict]:
     try:
         response = supabase.table("invoices").insert(row).execute()
         logger.info(
-            "Inserted invoice: vendor=%s total=%s", data.get("vendor"), data.get("total")
+            "Inserted invoice: vendor=%s total=%s user=%s",
+            data.get("vendor"), data.get("total"), user_id,
         )
         return response.data[0] if response.data else row
     except Exception as e:
@@ -229,14 +347,16 @@ def insert_invoice(data: dict) -> Optional[dict]:
 
 
 def get_invoices(
+    user_id: str,
     project_id: Optional[str] = None,
     category: Optional[str] = None,
     payment_status: Optional[str] = None,
 ) -> list[dict]:
-    """Fetch invoices from Supabase, optionally filtered."""
+    """Fetch invoices for a user, optionally filtered."""
     query = (
         supabase.table("invoices")
         .select("*, projects(name), invoice_categories(name)")
+        .eq("user_id", user_id)
         .order("invoice_date", desc=True)
     )
 
@@ -252,7 +372,6 @@ def get_invoices(
     for r in (response.data or []):
         db_status = r.get("payment_status") or "unpaid"
 
-        # Filter by category name (post-fetch since it's a join)
         cat_name = (r.get("invoice_categories") or {}).get("name") or "Other"
         if category and cat_name != category:
             continue
@@ -310,19 +429,22 @@ def get_invoice_by_id(invoice_id: str) -> Optional[dict]:
 
 
 def update_invoice(invoice_id: str, fields: dict) -> dict:
-    """
-    Update project, category, and/or payment_status on an invoice by UUID.
-    Accepts app-level field names: "project", "category", "payment_status".
-    """
+    """Update project, category, and/or payment_status on an invoice."""
     update_data: dict = {}
 
     if "project" in fields:
+        # Note: project_id update without user_id scoping is safe since invoice ownership
+        # is already validated at the route level before this is called.
         pname = fields["project"]
-        update_data["project_id"] = (
-            get_project_id(pname)
-            if pname and pname != "Unassigned"
-            else None
-        )
+        # We need user_id to scope the project lookup — get it from the invoice itself
+        inv = get_invoice_by_id(invoice_id)
+        uid = inv.get("user_id") if inv else None
+        if uid:
+            update_data["project_id"] = (
+                get_project_id(pname, uid) if pname and pname != "Unassigned" else None
+            )
+        else:
+            update_data["project_id"] = None
 
     if "category" in fields:
         update_data["category_id"] = get_category_id(fields["category"])
@@ -351,11 +473,9 @@ def delete_invoice(invoice_id: str) -> None:
 
 
 # ── Vendor mappings ─────────────────────────────────────────────────────────
-# vendor_mappings is not in the current Supabase schema.
-# These functions fail gracefully until the table is added.
+# vendor_mappings is not in the current Supabase schema; fails gracefully.
 
 def get_vendor_map() -> dict[str, str]:
-    """Return {vendor_name_lower: project_name}."""
     try:
         response = (
             supabase.table("vendor_mappings")
@@ -374,9 +494,9 @@ def get_vendor_map() -> dict[str, str]:
         return {}
 
 
-def set_vendor_project(vendor: str, project: str) -> None:
+def set_vendor_project(vendor: str, project: str, user_id: str) -> None:
     """Upsert a vendor → project mapping."""
-    project_id = get_project_id(project)
+    project_id = get_project_id(project, user_id)
     if not project_id:
         logger.warning("Cannot set vendor mapping: project '%s' not found", project)
         return
@@ -392,10 +512,10 @@ def set_vendor_project(vendor: str, project: str) -> None:
 
 # ── Dashboard stats ─────────────────────────────────────────────────────────
 
-def get_dashboard_stats() -> dict:
+def get_dashboard_stats(user_id: str) -> dict:
     """Return aggregate KPI data for the dashboard."""
-    invoices = get_invoices()
-    projects = get_projects()
+    invoices = get_invoices(user_id)
+    projects = get_projects(user_id)
 
     total_spend = sum(float(inv.get("total") or 0) for inv in invoices)
     unpaid = [i for i in invoices if i.get("payment_status") == "Unpaid"]

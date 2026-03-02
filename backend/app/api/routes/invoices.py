@@ -6,10 +6,10 @@ import mimetypes
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import get_current_user
+from app.api.deps import require_auth
 from app.db import crud
 from app.models.schemas import (
     GmailFetchRequest,
@@ -23,7 +23,6 @@ from app.models.schemas import (
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 log    = logging.getLogger(__name__)
 
-# Attachments directory (same location gmail_service saves to)
 ATTACHMENTS_DIR = Path(__file__).resolve().parents[3] / "attachments"
 
 
@@ -34,24 +33,20 @@ async def list_invoices(
     project_id:     Optional[str] = Query(default=None),
     category:       Optional[str] = Query(default=None),
     payment_status: Optional[str] = Query(default=None),
-    _user = Depends(get_current_user),
+    user: dict = Depends(require_auth),
 ):
-    """
-    Return all invoices, optionally filtered by project, category,
-    or payment status.
-    """
-    rows = crud.get_invoices(
+    return crud.get_invoices(
+        user_id=user["id"],
         project_id=project_id,
         category=category,
         payment_status=payment_status,
     )
-    return rows
 
 
 @router.get("/{invoice_id}", response_model=InvoiceResponse)
 async def get_invoice(
     invoice_id: str,
-    _user = Depends(get_current_user),
+    user: dict = Depends(require_auth),
 ):
     row = crud.get_invoice_by_id(invoice_id)
     if not row:
@@ -65,11 +60,8 @@ async def get_invoice(
 async def update_invoice(
     invoice_id: str,
     body: InvoiceUpdateRequest,
-    _user = Depends(get_current_user),
+    user: dict = Depends(require_auth),
 ):
-    """
-    Update editable fields on an invoice (project, category, payment_status).
-    """
     existing = crud.get_invoice_by_id(invoice_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -87,7 +79,7 @@ async def update_invoice(
 @router.delete("/{invoice_id}", response_model=MessageResponse)
 async def delete_invoice(
     invoice_id: str,
-    _user = Depends(get_current_user),
+    user: dict = Depends(require_auth),
 ):
     existing = crud.get_invoice_by_id(invoice_id)
     if not existing:
@@ -102,30 +94,25 @@ async def delete_invoice(
 @router.post("/fetch-from-gmail", response_model=GmailFetchResult)
 async def fetch_from_gmail(
     body: GmailFetchRequest = GmailFetchRequest(),
-    _user = Depends(get_current_user),
+    user: dict = Depends(require_auth),
 ):
     """
-    Trigger a Gmail IMAP fetch:
-      1. Connect to Gmail with EMAIL + APP_PASSWORD env vars.
-      2. Download unread email attachments (PDF / images).
-      3. Run each through Gemini invoice extraction.
-      4. Insert new (non-duplicate) invoices into Supabase.
-      5. Return a summary with inserted invoice objects.
-
-    This is a synchronous operation — consider running it as a background
-    task for large mailboxes (see the /fetch-from-gmail/async variant below).
+    Fetch unread emails from the authenticated user's Gmail inbox,
+    extract invoices via Gemini, and insert them into Supabase.
     """
     from app.services.gmail_service import fetch_invoices_from_gmail
 
     try:
-        result = fetch_invoices_from_gmail(max_emails=body.max_emails)
+        result = fetch_invoices_from_gmail(
+            user_id=user["id"],
+            max_emails=body.max_emails,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        log.exception("Gmail fetch failed")
+        log.exception("Gmail fetch failed for user %s", user["id"])
         raise HTTPException(status_code=500, detail=f"Gmail fetch failed: {e}")
 
-    # Re-fetch full invoice objects from DB so IDs and joins are populated
     inserted_ids = [inv.get("id") for inv in result["invoices"] if inv.get("id")]
     full_invoices = [
         crud.get_invoice_by_id(iid)
@@ -148,14 +135,8 @@ async def fetch_from_gmail(
 @router.get("/{invoice_id}/document")
 async def get_invoice_document(
     invoice_id: str,
-    _user = Depends(get_current_user),
+    user: dict = Depends(require_auth),
 ):
-    """
-    Stream the original attached document (PDF or image) for an invoice.
-
-    The frontend can use this URL directly in an <iframe> or <img> tag,
-    or trigger a download via the Content-Disposition header.
-    """
     invoice = crud.get_invoice_by_id(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -192,21 +173,12 @@ async def get_invoice_document(
 @router.get("/{invoice_id}/export-pdf")
 async def export_invoice_pdf(
     invoice_id: str,
-    _user = Depends(get_current_user),
+    user: dict = Depends(require_auth),
 ):
-    """
-    Generate and stream a PDF summary of a single invoice.
-
-    If the original attachment is already a PDF, it is returned directly.
-    Otherwise a simple summary PDF is generated using reportlab.
-
-    TODO: Build a proper branded PDF template with reportlab or weasyprint.
-    """
     invoice = crud.get_invoice_by_id(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    # If the original file is a PDF, serve it directly
     doc_path = invoice.get("document_path")
     if doc_path:
         file_path = ATTACHMENTS_DIR / doc_path
@@ -226,8 +198,6 @@ async def export_invoice_pdf(
                 },
             )
 
-    # Fallback: generate a minimal PDF summary
-    # TODO: Replace with a properly styled template
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.pdfgen import canvas
@@ -285,16 +255,14 @@ async def export_invoice_pdf(
 @router.post("/vendor-mappings", response_model=MessageResponse)
 async def set_vendor_mapping(
     body: VendorMappingRequest,
-    _user = Depends(get_current_user),
+    user: dict = Depends(require_auth),
 ):
-    """Map a vendor name to a project for future auto-assignment."""
-    crud.set_vendor_project(body.vendor, body.project)
+    crud.set_vendor_project(body.vendor, body.project, user["id"])
     return {"message": f"Mapped '{body.vendor}' → '{body.project}'"}
 
 
 @router.get("/vendor-mappings", response_model=dict)
 async def get_vendor_mappings(
-    _user = Depends(get_current_user),
+    user: dict = Depends(require_auth),
 ):
-    """Return all vendor → project mappings."""
     return crud.get_vendor_map()

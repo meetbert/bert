@@ -124,6 +124,16 @@ class VendorMappingRequest(BaseModel):
     project: str = Field(..., min_length=1)
 
 
+# ── Inbox schemas ────────────────────────────────────────────────────────────
+
+class InboxResponse(BaseModel):
+    """Meetbert.uk inbox address for a user."""
+    address: str
+    created_at: str
+    active: bool = True
+    is_new: bool = False
+
+
 # ── Generic responses ────────────────────────────────────────────────────────
 
 class MessageResponse(BaseModel):

@@ -12,7 +12,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, chat, dashboard, invoices, projects
+from app.api.routes import auth, chat, dashboard, email_inbound, inbox, invoices, projects
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 
@@ -57,10 +57,12 @@ app.add_middleware(
 
 API_PREFIX = "/api"
 
-app.include_router(invoices.router, prefix=API_PREFIX)
-app.include_router(projects.router, prefix=API_PREFIX)
-app.include_router(dashboard.router, prefix=API_PREFIX)
-app.include_router(chat.router,      prefix=API_PREFIX)
+app.include_router(invoices.router,       prefix=API_PREFIX)
+app.include_router(projects.router,       prefix=API_PREFIX)
+app.include_router(dashboard.router,      prefix=API_PREFIX)
+app.include_router(chat.router,           prefix=API_PREFIX)
+app.include_router(inbox.router,          prefix=API_PREFIX)
+app.include_router(email_inbound.router,  prefix=API_PREFIX)
 # Auth router has its own paths (must match Google Cloud Console redirect URI exactly)
 app.include_router(auth.router)
 

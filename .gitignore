@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Google OAuth credentials — never commit these
+client_secret*.json
+*.credentials.json
+token.json

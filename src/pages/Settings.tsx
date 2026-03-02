@@ -13,7 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Plus, LogOut, Pencil, Trash2, RefreshCw, Wifi } from 'lucide-react';
+import { ExternalLink, Plus, LogOut, Pencil, Trash2, RefreshCw, Wifi, CheckCircle2 } from 'lucide-react';
 import { SUPPORTED_CURRENCIES, currencySymbol } from '@/lib/currency';
 
 const Settings = () => {
@@ -26,8 +26,6 @@ const Settings = () => {
   // Inbox form
   const [emailProvider, setEmailProvider] = useState('gmail');
   const [emailAddress, setEmailAddress] = useState('');
-  const [appPassword, setAppPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
 
   // Category form
@@ -145,15 +143,28 @@ const Settings = () => {
               <Label>Email address</Label>
               <Input value={emailAddress} onChange={(e) => setEmailAddress(e.target.value)} />
             </div>
-            <div className="space-y-2">
-              <Label>App Password</Label>
-              <div className="relative">
-                <Input type={showPassword ? 'text' : 'password'} value={appPassword} onChange={(e) => setAppPassword(e.target.value)} />
-                <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPassword(!showPassword)}>
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+
+            {emailProvider === 'gmail' ? (
+              <div className="rounded-lg border bg-secondary/30 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  Gmail connected via OAuth2
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Gmail access is authorised at the server level using OAuth2 — no password needed.
+                  If you need to re-authorise (e.g. after revoking access), use the link below.
+                </p>
+                <a
+                  href="http://localhost:8000/api/auth/gmail/authorize"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                >
+                  Re-authorise Gmail access <ExternalLink className="h-3 w-3" />
+                </a>
               </div>
-            </div>
+            ) : null}
+
             <Button size="sm" onClick={saveInbox}>Save</Button>
           </CardContent>
         </Card>

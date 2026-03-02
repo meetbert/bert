@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Navbar } from '@/components/Navbar';
 import { toast } from '@/hooks/use-toast';
-import { Check, Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
 const Onboarding = () => {
@@ -21,10 +21,9 @@ const Onboarding = () => {
   // Step 2 state
   const [emailProvider, setEmailProvider] = useState<string>('gmail');
   const [emailAddress, setEmailAddress] = useState('');
-  const [appPassword, setAppPassword] = useState('');
   const [imapHost, setImapHost] = useState('');
   const [imapPort, setImapPort] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [imapPassword, setImapPassword] = useState('');
   const [emailSaved, setEmailSaved] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
@@ -105,12 +104,20 @@ const Onboarding = () => {
               </RadioGroup>
 
               {emailProvider === 'gmail' && (
-                <div className="space-y-3 rounded-lg border p-4 text-sm">
+                <div className="space-y-3 rounded-lg border bg-secondary/30 p-4 text-sm">
+                  <p className="font-medium">Gmail uses OAuth2 — no password needed.</p>
                   <ol className="list-inside list-decimal space-y-1 text-muted-foreground">
-                    <li>Create (or use) a Gmail account dedicated to invoices</li>
-                    <li>Go to Google Account → Security → App Passwords</li>
-                    <li>Generate an App Password for "Mail"</li>
-                    <li>Paste your Gmail address and App Password below</li>
+                    <li>Enter your Gmail address below and save</li>
+                    <li>The backend admin needs to complete the one-time authorisation at{' '}
+                      <a
+                        href="http://localhost:8000/api/auth/gmail/authorize"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-0.5 text-primary hover:underline"
+                      >
+                        /api/auth/gmail/authorize <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </li>
                   </ol>
                 </div>
               )}
@@ -130,30 +137,27 @@ const Onboarding = () => {
                   <Label>Email address</Label>
                   <Input value={emailAddress} onChange={(e) => setEmailAddress(e.target.value)} placeholder="invoices@yourdomain.com" />
                 </div>
-                <div className="space-y-2">
-                  <Label>{emailProvider === 'other' ? 'Password' : 'App Password'}</Label>
-                  <div className="relative">
-                    <Input type={showPassword ? 'text' : 'password'} value={appPassword} onChange={(e) => setAppPassword(e.target.value)} placeholder="••••••••" />
-                    <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPassword(!showPassword)}>
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-                {emailProvider === 'other' && (
+                {emailProvider !== 'gmail' && (
                   <>
                     <div className="space-y-2">
-                      <Label>IMAP Host</Label>
-                      <Input value={imapHost} onChange={(e) => setImapHost(e.target.value)} placeholder="imap.example.com" />
+                      <Label>Password</Label>
+                      <Input type="password" value={imapPassword} onChange={(e) => setImapPassword(e.target.value)} placeholder="••••••••" />
                     </div>
-                    <div className="space-y-2">
-                      <Label>IMAP Port</Label>
-                      <Input value={imapPort} onChange={(e) => setImapPort(e.target.value)} placeholder="993" />
-                    </div>
+                    {emailProvider === 'other' && (
+                      <>
+                        <div className="space-y-2">
+                          <Label>IMAP Host</Label>
+                          <Input value={imapHost} onChange={(e) => setImapHost(e.target.value)} placeholder="imap.example.com" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>IMAP Port</Label>
+                          <Input value={imapPort} onChange={(e) => setImapPort(e.target.value)} placeholder="993" />
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </div>
-
-              <p className="text-xs text-muted-foreground">Bert. uses IMAP read-only access to fetch invoice attachments. Your credentials are stored encrypted.</p>
 
               <div className="flex items-center gap-3">
                 <Button onClick={saveEmailSettings} disabled={!emailAddress}>Save & Continue →</Button>

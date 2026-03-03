@@ -15,9 +15,8 @@ import { toast } from '@/hooks/use-toast';
 import { Search, Download, ChevronLeft, ChevronRight, FileText, Archive, Upload, AlertCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { formatCurrency } from '@/lib/currency';
-
-const CURRENCY = 'GBP';
+import { useExchangeRates } from '@/hooks/useExchangeRates';
+import { formatCurrency, convertToBase } from '@/lib/currency';
 
 const PAGE_SIZE = 25;
 
@@ -36,6 +35,7 @@ const Invoices = () => {
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(0);
   const { baseCurrency } = useUserSettings();
+  const { rates } = useExchangeRates(baseCurrency);
 
   const fetchData = useCallback(async () => {
     const [i, p, c] = await Promise.all([
@@ -260,7 +260,14 @@ const Invoices = () => {
                       <td className="p-3 text-muted-foreground">{inv.due_date ?? '—'}</td>
                       <td className="p-3 text-muted-foreground">{inv.invoice_number}</td>
                       <td className="p-3">
-                        <span className="font-medium">{formatCurrency(inv.total ?? 0, CURRENCY)}</span>
+                        <span className="font-medium">
+                          {formatCurrency(convertToBase(inv.total ?? 0, origCurrency, rates), baseCurrency)}
+                        </span>
+                        {showOriginal && (
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            ({formatCurrency(inv.total ?? 0, origCurrency)})
+                          </span>
+                        )}
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
                         <Select value={inv.category_id ?? ''} onValueChange={(v) => assignCategory(inv.id, v)}>

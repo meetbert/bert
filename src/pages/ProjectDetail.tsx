@@ -15,7 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency, convertToBase } from '@/lib/currency';
+import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { FileText, DollarSign, Target, AlertCircle, ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { ProjectEditDialog } from '@/components/ProjectEditDialog';
@@ -26,6 +27,7 @@ const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { baseCurrency } = useUserSettings();
+  const { rates } = useExchangeRates(baseCurrency);
   const [project, setProject] = useState<Project | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -82,21 +84,21 @@ const ProjectDetail = () => {
   if (loading) return <div className="min-h-screen"><Navbar /><div className="container py-8"><div className="h-40 animate-pulse rounded-lg bg-secondary" /></div></div>;
   if (!project) return <div className="min-h-screen"><Navbar /><div className="container py-16 text-center text-muted-foreground">Project not found</div></div>;
 
-  const totalSpent = invoices.reduce((s, i) => s + (i.total ?? 0), 0);
+  const totalSpent = invoices.reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
   const remaining = project.budget - totalSpent;
   const pct = project.budget > 0 ? Math.min((totalSpent / project.budget) * 100, 100) : 0;
 
   const catSpend = categories.map((c) => ({
     name: c.name,
-    value: invoices.filter((i) => i.category_id === c.id).reduce((s, i) => s + (i.total ?? 0), 0),
+    value: invoices.filter((i) => i.category_id === c.id).reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0),
   })).filter((c) => c.value > 0);
 
   const vendorSpend: Record<string, number> = {};
-  invoices.forEach((i) => { const v = i.vendor_name ?? 'Unknown'; vendorSpend[v] = (vendorSpend[v] ?? 0) + (i.total ?? 0); });
+  invoices.forEach((i) => { const v = i.vendor_name ?? 'Unknown'; vendorSpend[v] = (vendorSpend[v] ?? 0) + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates); });
   const vendorData = Object.entries(vendorSpend).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 
   const monthlyMap: Record<string, number> = {};
-  invoices.forEach((i) => { const m = i.invoice_date?.slice(0, 7) ?? 'N/A'; monthlyMap[m] = (monthlyMap[m] ?? 0) + (i.total ?? 0); });
+  invoices.forEach((i) => { const m = i.invoice_date?.slice(0, 7) ?? 'N/A'; monthlyMap[m] = (monthlyMap[m] ?? 0) + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates); });
   const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const monthlyData = Object.entries(monthlyMap).sort().map(([month, value]) => {
     const [y, m] = month.split('-');
@@ -192,7 +194,10 @@ const ProjectDetail = () => {
                     <td className="p-3 text-muted-foreground">{inv.due_date ?? '—'}</td>
                     <td className="p-3 text-muted-foreground">{inv.invoice_number ?? '—'}</td>
                     <td className="p-3">
-                      <span className="font-medium">{formatCurrency(inv.total ?? 0, baseCurrency)}</span>
+                      <span className="font-medium">{formatCurrency(convertToBase(inv.total ?? 0, inv.currency ?? baseCurrency, rates), baseCurrency)}</span>
+                      {inv.currency && inv.currency !== baseCurrency && (
+                        <span className="ml-1 text-xs text-muted-foreground">({formatCurrency(inv.total ?? 0, inv.currency)})</span>
+                      )}
                     </td>
                     <td className="p-3" onClick={(e) => e.stopPropagation()}>
                       <Select value={inv.category_id ?? ''} onValueChange={(v) => assignCategory(inv.id, v)}>

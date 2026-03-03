@@ -12,13 +12,15 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Plus, FolderOpen } from 'lucide-react';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency, convertToBase } from '@/lib/currency';
+import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { ProjectCreationWizard } from '@/components/ProjectCreationWizard';
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [invoices, setInvoices] = useState<{ id: string; total: number; project_id: string | null }[]>([]);
+  const [invoices, setInvoices] = useState<{ id: string; total: number; currency: string | null; project_id: string | null }[]>([]);
   const { baseCurrency } = useUserSettings();
+  const { rates } = useExchangeRates(baseCurrency);
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [filterTab, setFilterTab] = useState<'all' | 'Active' | 'Completed' | 'Archived'>('all');
@@ -26,7 +28,7 @@ const Projects = () => {
   const fetchData = async () => {
     const [p, i] = await Promise.all([
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
-      supabase.from('invoices').select('id, total, project_id'),
+      supabase.from('invoices').select('id, total, currency, project_id'),
     ]);
     setProjects(p.data ?? []);
     setInvoices(i.data ?? []);
@@ -41,7 +43,7 @@ const Projects = () => {
   const completedProjects = filteredProjects.filter((p) => p.status === 'Completed' || p.status === 'Archived');
 
   const renderProjectCard = (p: Project) => {
-    const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + (i.total ?? 0), 0);
+    const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
     const hasBudget = p.budget != null && p.budget > 0;
     const pct = hasBudget ? Math.min((spent / p.budget!) * 100, 100) : 0;
 

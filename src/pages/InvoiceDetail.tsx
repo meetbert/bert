@@ -12,7 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { formatCurrency, SUPPORTED_CURRENCIES } from '@/lib/currency';
+import { formatCurrency, convertToBase, SUPPORTED_CURRENCIES } from '@/lib/currency';
+import { useUserSettings } from '@/hooks/useUserSettings';
+import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { ArrowLeft, Pencil, Check, X, Download, Trash2, Clock, FileText } from 'lucide-react';
 
 const InvoiceDetail = () => {
@@ -28,6 +30,8 @@ const InvoiceDetail = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const { baseCurrency } = useUserSettings();
+  const { rates } = useExchangeRates(baseCurrency);
 
   const fetchInvoice = async () => {
     if (!id) { setLoading(false); return; }
@@ -318,7 +322,17 @@ const InvoiceDetail = () => {
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(invoice.subtotal ?? 0, invoice.currency ?? 'EUR')}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-muted-foreground">VAT</span><span>{formatCurrency(invoice.vat ?? 0, invoice.currency ?? 'EUR')}</span></div>
-                  <div className="flex justify-between text-sm font-bold border-t pt-2 mt-2"><span>Total</span><span>{formatCurrency(invoice.total ?? 0, invoice.currency ?? 'EUR')}</span></div>
+                  <div className="flex justify-between text-sm font-bold border-t pt-2 mt-2">
+                    <span>Total</span>
+                    <span className="flex items-baseline gap-1.5">
+                      {formatCurrency(invoice.total ?? 0, invoice.currency ?? 'EUR')}
+                      {invoice.currency && invoice.currency !== baseCurrency && (
+                        <span className="text-xs font-normal text-muted-foreground">
+                          ≈ {formatCurrency(convertToBase(invoice.total ?? 0, invoice.currency, rates), baseCurrency)}
+                        </span>
+                      )}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>

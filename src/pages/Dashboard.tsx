@@ -12,11 +12,13 @@ import { Button } from '@/components/ui/button';
 import { FileText, DollarSign, FolderOpen, AlertCircle, Clock, CalendarDays, TrendingUp, AlertTriangle } from 'lucide-react';
 import { CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { formatCurrency } from '@/lib/currency';
+import { useExchangeRates } from '@/hooks/useExchangeRates';
+import { formatCurrency, convertToBase } from '@/lib/currency';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { baseCurrency } = useUserSettings();
+  const { rates } = useExchangeRates(baseCurrency);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -50,8 +52,8 @@ const Dashboard = () => {
   const activeProjects = projects.filter((p) => p.status === 'Active');
   const unpaid = invoices.filter((i) => i.payment_status === 'unpaid');
   const overdue = invoices.filter((i) => i.payment_status === 'overdue');
-  const totalUnpaid = unpaid.reduce((s, i) => s + (i.total ?? 0), 0);
-  const totalOverdue = overdue.reduce((s, i) => s + (i.total ?? 0), 0);
+  const totalUnpaid = unpaid.reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
+  const totalOverdue = overdue.reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
   const totalOutstanding = totalUnpaid + totalOverdue;
 
   const now = new Date();
@@ -72,7 +74,7 @@ const Dashboard = () => {
     if (!i.invoice_date) return;
     const month = i.invoice_date.slice(0, 7);
     if (month >= cutoffStr) {
-      monthlyMap[month] = (monthlyMap[month] ?? 0) + (i.total ?? 0);
+      monthlyMap[month] = (monthlyMap[month] ?? 0) + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates);
     }
   });
   const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -200,7 +202,12 @@ const Dashboard = () => {
                       <tr key={inv.id} onClick={() => navigate(`/invoices/${inv.id}`)} className="border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60">
                         <td className="p-3 font-medium">{inv.vendor_name}</td>
                         <td className="p-3 text-muted-foreground">{inv.due_date ?? '—'}</td>
-                        <td className="p-3 font-medium">{formatCurrency(inv.total ?? 0, baseCurrency)}</td>
+                        <td className="p-3 font-medium">
+                          {formatCurrency(convertToBase(inv.total ?? 0, inv.currency ?? baseCurrency, rates), baseCurrency)}
+                          {inv.currency && inv.currency !== baseCurrency && (
+                            <span className="ml-1 text-xs text-muted-foreground">({formatCurrency(inv.total ?? 0, inv.currency)})</span>
+                          )}
+                        </td>
                         <td className="p-3"><StatusBadge status={inv.payment_status} /></td>
                       </tr>
                     ))}
@@ -257,7 +264,7 @@ const Dashboard = () => {
             <div className="grid gap-4 lg:grid-cols-2">
               {activeProjects.map((p) => {
                 const projectInvoices = invoices.filter((i) => i.project_id === p.id);
-                const spent = projectInvoices.reduce((s, i) => s + (i.total ?? 0), 0);
+                const spent = projectInvoices.reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
                 const pct = hasBudget(p) ? (spent / p.budget!) * 100 : 0;
                 const isOverBudget = pct > 100;
 
@@ -267,7 +274,7 @@ const Dashboard = () => {
                 projCatIds.forEach((cid) => { catMap[cid] = 0; });
                 projectInvoices.forEach((i) => {
                   const cid = i.category_id ?? '__uncategorized';
-                  catMap[cid] = (catMap[cid] ?? 0) + (i.total ?? 0);
+                  catMap[cid] = (catMap[cid] ?? 0) + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates);
                 });
                 const catRows = Object.entries(catMap)
                   .map(([cid, amount]) => ({

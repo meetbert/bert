@@ -31,6 +31,7 @@ export const ChatButton = () => {
       const { data } = await supabase
         .from('chat_messages')
         .select('role, content')
+        .eq('user_id', session.user.id)
         .order('created_at', { ascending: true })
         .limit(50);
 

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
 import { Navbar } from '@/components/Navbar';
 import { StatusDropdown } from '@/components/StatusDropdown';
+import { ImportModal } from '@/components/ImportModal';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EmptyState } from '@/components/EmptyState';
 import { toast } from '@/hooks/use-toast';
-import { Search, Download, ChevronLeft, ChevronRight, FileText, Archive, Pencil } from 'lucide-react';
+import { Search, Download, ChevronLeft, ChevronRight, FileText, Archive, Upload, AlertCircle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
 
@@ -21,6 +23,7 @@ const PAGE_SIZE = 25;
 
 const Invoices = () => {
   const navigate = useNavigate();
+  const [showImport, setShowImport] = useState(false);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -28,9 +31,8 @@ const Invoices = () => {
   const [search, setSearch] = useState('');
   const [filterProject, setFilterProject] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [filterProjectScope, setFilterProjectScope] = useState<'active' | 'all' | 'archived'>('active');
-  const [quickFilter, setQuickFilter] = useState<'all' | 'unpaid_overdue'>('all');
+  const [quickFilter, setQuickFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(0);
   const { baseCurrency } = useUserSettings();
@@ -45,11 +47,20 @@ const Invoices = () => {
     const projectsMap = new Map((p.data ?? []).map((proj: any) => [proj.id, proj]));
     const categoriesMap = new Map((c.data ?? []).map((cat: any) => [cat.id, cat]));
 
-    const enriched = (i.data ?? []).map((inv: any) => ({
-      ...inv,
-      project: inv.project_id ? projectsMap.get(inv.project_id) ?? null : null,
-      category: inv.category_id ? categoriesMap.get(inv.category_id) ?? null : null,
-    }));
+    const today = new Date().toISOString().split('T')[0];
+    const enriched = (i.data ?? []).map((inv: any) => {
+      // Derive overdue: unpaid + due_date in the past
+      let status = inv.payment_status;
+      if (status === 'unpaid' && inv.due_date && inv.due_date < today) {
+        status = 'overdue';
+      }
+      return {
+        ...inv,
+        payment_status: status,
+        project: inv.project_id ? projectsMap.get(inv.project_id) ?? null : null,
+        category: inv.category_id ? categoriesMap.get(inv.category_id) ?? null : null,
+      };
+    });
 
     setInvoices(enriched);
     setProjects(p.data ?? []);
@@ -66,9 +77,11 @@ const Invoices = () => {
   const filtered = useMemo(() => {
     let result = [...invoices];
 
-    // Quick filter
-    if (quickFilter === 'unpaid_overdue') {
+    // Quick filter — paid/unpaid (unpaid includes overdue)
+    if (quickFilter === 'unpaid') {
       result = result.filter((i) => i.payment_status === 'unpaid' || i.payment_status === 'overdue');
+    } else if (quickFilter === 'paid') {
+      result = result.filter((i) => i.payment_status === 'paid');
     }
 
     // Project scope filter
@@ -83,15 +96,14 @@ const Invoices = () => {
       result = result.filter((i) => i.vendor_name?.toLowerCase().includes(q) || i.invoice_number?.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q));
     }
     if (filterProject !== 'all') result = result.filter((i) => i.project_id === filterProject);
-    if (filterCategory !== 'all') result = result.filter((i) => String(i.category_id) === filterCategory);
-    if (filterStatus !== 'all') result = result.filter((i) => i.payment_status === filterStatus);
+    if (filterCategory !== 'all') result = result.filter((i) => i.category_id === filterCategory);
     result.sort((a, b) => {
       if (sort === 'newest') return (b.invoice_date ?? '').localeCompare(a.invoice_date ?? '');
       if (sort === 'oldest') return (a.invoice_date ?? '').localeCompare(b.invoice_date ?? '');
       return (b.total ?? 0) - (a.total ?? 0);
     });
     return result;
-  }, [invoices, search, filterProject, filterCategory, filterStatus, sort, quickFilter, filterProjectScope, archivedProjectIds]);
+  }, [invoices, search, filterProject, filterCategory, sort, quickFilter, filterProjectScope, archivedProjectIds]);
 
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
@@ -114,7 +126,7 @@ const Invoices = () => {
   const assignCategory = async (invoiceId: string, categoryId: string) => {
     const { error } = await supabase.from('invoices').update({ category_id: categoryId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    const cat = categories.find(c => c.id.toString() === categoryId);
+    const cat = categories.find(c => c.id === categoryId);
     setInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
     toast({ title: 'Category assigned' });
   };
@@ -135,22 +147,18 @@ const Invoices = () => {
     <div className="min-h-screen">
       <Navbar />
       <div className="container space-y-6 py-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Invoices</h1>
-          <Button variant="outline" size="sm" onClick={exportCsv}><Download className="mr-1 h-4 w-4" /> Export CSV</Button>
-        </div>
+        <h1 className="text-2xl font-bold">Invoices</h1>
 
-        {/* Quick filter + Project scope tabs */}
+        {/* Quick filter + Project scope tabs + Import/Export */}
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex gap-1 rounded-lg bg-secondary p-1">
-            <button
-              onClick={() => { setQuickFilter('all'); setPage(0); }}
-              className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${quickFilter === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            >All</button>
-            <button
-              onClick={() => { setQuickFilter('unpaid_overdue'); setPage(0); }}
-              className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${quickFilter === 'unpaid_overdue' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            >Unpaid / Overdue</button>
+            {([['all', 'All'], ['paid', 'Paid'], ['unpaid', 'Unpaid']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => { setQuickFilter(key); setPage(0); }}
+                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${quickFilter === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >{label}</button>
+            ))}
           </div>
           <div className="flex gap-1 rounded-lg bg-secondary p-1">
             {([['active', 'Active Projects'], ['all', 'All'], ['archived', 'Archived']] as const).map(([key, label]) => (
@@ -160,6 +168,14 @@ const Invoices = () => {
                 className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${filterProjectScope === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >{label}</button>
             ))}
+          </div>
+          <div className="ml-auto flex gap-2">
+            <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm font-medium transition-colors hover:bg-secondary">
+              <Upload className="h-4 w-4" /> Import
+            </button>
+            <button onClick={exportCsv} className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm font-medium transition-colors hover:bg-secondary">
+              <Download className="h-4 w-4" /> Export
+            </button>
           </div>
         </div>
 
@@ -180,16 +196,7 @@ const Invoices = () => {
             <SelectTrigger className="w-40"><SelectValue placeholder="Category" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); setPage(0); }}>
-            <SelectTrigger className="w-32"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="unpaid">Unpaid</SelectItem>
-              <SelectItem value="paid">Paid</SelectItem>
-              <SelectItem value="overdue">Overdue</SelectItem>
+              {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={sort} onValueChange={setSort}>
@@ -241,11 +248,12 @@ const Invoices = () => {
                   const origCurrency = inv.currency || baseCurrency;
                   const showOriginal = origCurrency !== baseCurrency;
                   const isArchived = inv.project_id && archivedProjectIds.has(inv.project_id);
+                  const unassigned = !inv.category_id || !inv.project_id;
                   return (
                     <tr
                       key={inv.id}
                       onClick={() => navigate(`/invoices/${inv.id}`)}
-                      className={`group border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60 ${isArchived ? 'opacity-60' : ''}`}
+                      className={`group border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60 ${isArchived ? 'opacity-60' : ''} ${unassigned ? 'outline outline-1 -outline-offset-1 outline-primary/50 bg-primary/[0.03]' : ''}`}
                     >
                       <td className="p-3 font-medium">{inv.vendor_name}</td>
                       <td className="p-3 text-muted-foreground">{inv.invoice_date}</td>
@@ -255,46 +263,40 @@ const Invoices = () => {
                         <span className="font-medium">{formatCurrency(inv.total ?? 0, CURRENCY)}</span>
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                        {(inv as any).category?.name ? (
-                          <span className="text-muted-foreground">{(inv as any).category.name}</span>
-                        ) : (
-                          <div className="relative">
-                            <span className="flex items-center gap-1 text-muted-foreground/40 group-hover:hidden">—</span>
-                            <div className="hidden group-hover:block">
-                              <Select onValueChange={(v) => assignCategory(inv.id, v)}>
-                                <SelectTrigger className="h-7 w-28 text-xs border-dashed gap-1">
-                                  <Pencil className="h-3 w-3 shrink-0" />
-                                  <SelectValue placeholder="Assign" />
-                                </SelectTrigger>
-                                <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        )}
+                        <Select value={inv.category_id ?? ''} onValueChange={(v) => assignCategory(inv.id, v)}>
+                          <SelectTrigger className="h-7 w-36 text-xs border-dashed justify-between text-left">
+                            <SelectValue placeholder="Assign" />
+                          </SelectTrigger>
+                          <SelectContent position="popper" sideOffset={4}>{categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                        </Select>
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                        {(inv as any).project?.name ? (
-                          <span className="text-muted-foreground flex items-center gap-1.5">
-                            {(inv as any).project.name}
-                            {isArchived && <Archive className="h-3 w-3 text-muted-foreground/60" />}
-                          </span>
-                        ) : (
-                          <div className="relative">
-                            <span className="flex items-center gap-1 text-muted-foreground/40 group-hover:hidden">—</span>
-                            <div className="hidden group-hover:block">
-                              <Select onValueChange={(v) => assignProject(inv.id, v)}>
-                                <SelectTrigger className="h-7 w-28 text-xs border-dashed gap-1">
-                                  <Pencil className="h-3 w-3 shrink-0" />
-                                  <SelectValue placeholder="Assign" />
-                                </SelectTrigger>
-                                <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          <Select value={inv.project_id ?? ''} onValueChange={(v) => assignProject(inv.id, v)}>
+                            <SelectTrigger className="h-7 w-36 text-xs border-dashed justify-between text-left">
+                              <SelectValue placeholder="Assign" />
+                            </SelectTrigger>
+                            <SelectContent position="popper" sideOffset={4}>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                          </Select>
+                          {isArchived && <Archive className="h-3 w-3 text-muted-foreground/60" />}
+                        </div>
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                        <StatusDropdown status={inv.payment_status} onChangeStatus={(s) => changeStatus(inv, s)} />
+                        <div className="flex items-center gap-1.5">
+                          <StatusDropdown status={inv.payment_status === 'overdue' ? 'unpaid' : inv.payment_status} onChangeStatus={(s) => changeStatus(inv, s)} />
+                          {inv.payment_status === 'overdue' && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive">
+                                    <AlertCircle className="h-3 w-3" /> Overdue
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Due date has passed</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -313,6 +315,11 @@ const Invoices = () => {
           </div>
         )}
       </div>
+      <ImportModal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        onImported={fetchData}
+      />
     </div>
   );
 };

@@ -3,17 +3,17 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
 import { Navbar } from '@/components/Navbar';
-import { KpiCard } from '@/components/KpiCard';
-import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { ArrowLeft, Pencil, Check, X, Download, User, DollarSign, FolderOpen, Tag, Trash2, Clock, FileText } from 'lucide-react';
+import { formatCurrency, SUPPORTED_CURRENCIES } from '@/lib/currency';
+import { ArrowLeft, Pencil, Check, X, Download, Trash2, Clock, FileText } from 'lucide-react';
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -22,52 +22,95 @@ const InvoiceDetail = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Invoice>>({});
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
   const fetchInvoice = async () => {
-    if (!id) return;
-    const [inv, p, c] = await Promise.all([
-      supabase.from('invoices').select('*').eq('id', id).single(),
-      supabase.from('projects').select('*'),
-      supabase.from('invoice_categories').select('*'),
-    ]);
+    if (!id) { setLoading(false); return; }
+    try {
+      const [inv, p, c] = await Promise.all([
+        supabase.from('invoices').select('*').eq('id', id).single(),
+        supabase.from('projects').select('*'),
+        supabase.from('invoice_categories').select('*'),
+      ]);
 
-    // Enrich with project/category
-    const projectsMap = new Map((p.data ?? []).map((proj: any) => [proj.id, proj]));
-    const categoriesMap = new Map((c.data ?? []).map((cat: any) => [cat.id, cat]));
-    const enriched = inv.data ? {
-      ...inv.data,
-      project: inv.data.project_id ? projectsMap.get(inv.data.project_id) ?? null : null,
-      category: inv.data.category_id ? categoriesMap.get(inv.data.category_id) ?? null : null,
-    } : null;
+      if (inv.error) {
+        setError(inv.error.message);
+        setLoading(false);
+        return;
+      }
 
-    setInvoice(enriched as any);
-    setProjects(p.data ?? []);
-    setCategories(c.data ?? []);
+      const projectsMap = new Map((p.data ?? []).map((proj: any) => [proj.id, proj]));
+      const categoriesMap = new Map((c.data ?? []).map((cat: any) => [cat.id, cat]));
+      const enriched = inv.data ? {
+        ...inv.data,
+        project: inv.data.project_id ? projectsMap.get(inv.data.project_id) ?? null : null,
+        category: inv.data.category_id ? categoriesMap.get(inv.data.category_id) ?? null : null,
+      } : null;
 
-    // Get signed URL for document
-    if (enriched?.document_path) {
-      const { data } = await supabase.storage.from('invoices-bucket').createSignedUrl(enriched.document_path, 3600);
-      setDocumentUrl(data?.signedUrl ?? null);
+      setInvoice(enriched as any);
+      setProjects(p.data ?? []);
+      setCategories(c.data ?? []);
+
+      // Non-blocking signed URL fetch — blob for PDFs to prevent auto-download
+      if (enriched?.document_path) {
+        const isPdfFile = enriched.document_path.toLowerCase().endsWith('.pdf');
+
+        supabase.storage.from('invoices-bucket')
+          .createSignedUrl(enriched.document_path, 3600)
+          .then(async ({ data }) => {
+            if (!data?.signedUrl) { setDocumentUrl(null); return; }
+            setDownloadUrl(data.signedUrl);
+
+            if (isPdfFile) {
+              try {
+                const resp = await fetch(data.signedUrl);
+                const blob = await resp.blob();
+                const blobUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+                setDocumentUrl(blobUrl);
+              } catch {
+                setDocumentUrl(data.signedUrl);
+              }
+            } else {
+              setDocumentUrl(data.signedUrl);
+            }
+          });
+      }
+    } catch (e: any) {
+      setError(e?.message ?? 'Unknown error loading invoice');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   useEffect(() => { fetchInvoice(); }, [id]);
 
+  // Revoke blob URL on cleanup
+  useEffect(() => {
+    return () => {
+      if (documentUrl?.startsWith('blob:')) URL.revokeObjectURL(documentUrl);
+    };
+  }, [documentUrl]);
+
   const startEdit = () => {
     if (!invoice) return;
     setEditData({
+      vendor_name: invoice.vendor_name,
+      invoice_number: invoice.invoice_number,
+      invoice_date: invoice.invoice_date,
+      currency: invoice.currency,
+      due_date: invoice.due_date,
       description: invoice.description,
       line_items: invoice.line_items,
-      due_date: invoice.due_date,
       subtotal: invoice.subtotal,
       vat: invoice.vat,
       total: invoice.total,
+      project_id: invoice.project_id,
+      category_id: invoice.category_id,
     });
     setEditing(true);
   };
@@ -79,28 +122,6 @@ const InvoiceDetail = () => {
     setEditing(false);
     fetchInvoice();
     toast({ title: 'Saved' });
-  };
-
-  const togglePayment = async () => {
-    if (!invoice) return;
-    const newStatus = invoice.payment_status === 'paid' ? 'unpaid' : 'paid';
-    await supabase.from('invoices').update({ payment_status: newStatus }).eq('id', invoice.id);
-    fetchInvoice();
-    toast({ title: `Marked as ${newStatus}` });
-  };
-
-  const assignProject = async (projectId: string) => {
-    if (!invoice) return;
-    await supabase.from('invoices').update({ project_id: projectId }).eq('id', invoice.id);
-    fetchInvoice();
-    toast({ title: 'Project assigned' });
-  };
-
-  const assignCategory = async (categoryId: string) => {
-    if (!invoice) return;
-    await supabase.from('invoices').update({ category_id: categoryId }).eq('id', invoice.id);
-    fetchInvoice();
-    toast({ title: 'Category assigned' });
   };
 
   const handleDelete = async () => {
@@ -117,7 +138,9 @@ const InvoiceDetail = () => {
     ...(invoice.project_id ? [{ date: new Date().toISOString().slice(0, 10), text: 'Assigned to project' }] : []),
   ] : [];
 
-  const isPdf = invoice?.document_path?.toLowerCase().endsWith('.pdf');
+  const docPath = invoice?.document_path?.toLowerCase() ?? '';
+  const isPdf = docPath.endsWith('.pdf');
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/.test(docPath);
 
   if (loading) return (
     <div className="min-h-screen">
@@ -133,6 +156,8 @@ const InvoiceDetail = () => {
     </div>
   );
 
+  if (error) return <div className="min-h-screen"><Navbar /><div className="container py-16 text-center text-destructive">Error: {error}</div></div>;
+
   if (!invoice) return <div className="min-h-screen"><Navbar /><div className="container py-16 text-center text-muted-foreground">Invoice not found</div></div>;
 
   return (
@@ -141,26 +166,166 @@ const InvoiceDetail = () => {
       <div className="container space-y-6 py-8">
         <Link to="/invoices" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> All Invoices</Link>
 
+        {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Invoice from {invoice.vendor_name}</h1>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <span className="rounded bg-secondary px-2 py-1 text-xs">{invoice.invoice_date}</span>
-              <span className="rounded bg-secondary px-2 py-1 text-xs">#{invoice.invoice_number}</span>
-              <span className="rounded bg-secondary px-2 py-1 text-xs">{invoice.currency}</span>
-            </div>
+            <h1 className="text-3xl font-bold">{invoice.vendor_name}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              #{invoice.invoice_number} &middot; {invoice.invoice_date} &middot; {invoice.currency}
+            </p>
           </div>
-          <div className="flex gap-2">
-            <StatusBadge status={invoice.payment_status} />
-            <Button variant="outline" size="sm" onClick={togglePayment}>
-              Mark as {invoice.payment_status === 'paid' ? 'Unpaid' : 'Paid'}
-            </Button>
-            {!editing && <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="mr-1 h-3.5 w-3.5" /> Edit</Button>}
-            <Button variant="destructive" size="sm" onClick={() => setShowDeleteModal(true)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Delete</Button>
-          </div>
+          <Button variant="destructive" size="sm" onClick={() => setShowDeleteModal(true)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Delete</Button>
         </div>
 
-        {/* Activity Log */}
+        {/* Details (left) + Activity (right) */}
+        <div className="grid gap-6 lg:grid-cols-[1fr,360px]">
+
+        {/* Unified Details Card */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-sm">Invoice Details</CardTitle>
+            {editing ? (
+              <div className="flex gap-2">
+                <Button size="sm" onClick={saveEdit}><Check className="mr-1 h-3.5 w-3.5" /> Save</Button>
+                <Button variant="ghost" size="sm" onClick={() => setEditing(false)}><X className="mr-1 h-3.5 w-3.5" /> Cancel</Button>
+              </div>
+            ) : (
+              <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="mr-1 h-3.5 w-3.5" /> Edit</Button>
+            )}
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Vendor — full width, prominent */}
+            <div>
+              <Label className="text-xs text-muted-foreground">Vendor</Label>
+              {editing ? (
+                <Input
+                  value={editData.vendor_name ?? ''}
+                  onChange={(e) => setEditData({ ...editData, vendor_name: e.target.value })}
+                  className="text-lg font-semibold"
+                />
+              ) : (
+                <p className="text-lg font-semibold">{invoice.vendor_name || '—'}</p>
+              )}
+            </div>
+
+            {/* Core fields row */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Invoice #</Label>
+                {editing ? (
+                  <Input value={editData.invoice_number ?? ''} onChange={(e) => setEditData({ ...editData, invoice_number: e.target.value })} />
+                ) : (
+                  <p className="text-sm">{invoice.invoice_number || '—'}</p>
+                )}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Invoice Date</Label>
+                {editing ? (
+                  <Input type="date" value={editData.invoice_date ?? ''} onChange={(e) => setEditData({ ...editData, invoice_date: e.target.value })} />
+                ) : (
+                  <p className="text-sm">{invoice.invoice_date || '—'}</p>
+                )}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Due Date</Label>
+                {editing ? (
+                  <Input type="date" value={editData.due_date ?? ''} onChange={(e) => setEditData({ ...editData, due_date: e.target.value })} />
+                ) : (
+                  <p className="text-sm">{invoice.due_date || '—'}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Assignment row */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Currency</Label>
+                {editing ? (
+                  <Select value={editData.currency ?? ''} onValueChange={(v) => setEditData({ ...editData, currency: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                    <SelectContent>{SUPPORTED_CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-sm">{invoice.currency || '—'}</p>
+                )}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Project</Label>
+                {editing ? (
+                  <Select value={editData.project_id ?? ''} onValueChange={(v) => setEditData({ ...editData, project_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
+                    <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-sm">{(invoice as any).project?.name ?? 'Unassigned'}</p>
+                )}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Category</Label>
+                {editing ? (
+                  <Select value={editData.category_id?.toString() ?? ''} onValueChange={(v) => setEditData({ ...editData, category_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                    <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-sm">{(invoice as any).category?.name ?? 'Uncategorized'}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Description */}
+            <div>
+              <Label className="text-xs text-muted-foreground">Description</Label>
+              {editing ? (
+                <Textarea value={editData.description ?? ''} onChange={(e) => setEditData({ ...editData, description: e.target.value })} rows={3} />
+              ) : (
+                <p className="text-sm">{invoice.description || '—'}</p>
+              )}
+            </div>
+
+            {/* Line Items */}
+            <div>
+              <Label className="text-xs text-muted-foreground">Line Items</Label>
+              {editing ? (
+                <Textarea
+                  value={Array.isArray(editData.line_items) ? JSON.stringify(editData.line_items, null, 2) : (editData.line_items ?? '')}
+                  onChange={(e) => setEditData({ ...editData, line_items: e.target.value })}
+                  rows={4}
+                  className="font-mono text-xs"
+                />
+              ) : (
+                <div className="text-sm">
+                  {!invoice.line_items
+                    ? '—'
+                    : Array.isArray(invoice.line_items)
+                      ? (invoice.line_items as any[]).map((item: any, i: number) =>
+                          <span key={i} className="block">{item.description ?? item.item} x{item.quantity} @ {item.unit_price}</span>
+                        )
+                      : String(invoice.line_items)}
+                </div>
+              )}
+            </div>
+
+            {/* Financial summary — receipt style */}
+            <div className="border-t pt-4 mt-4">
+              {editing ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-4"><span className="text-sm text-muted-foreground">Subtotal</span><Input type="number" step="0.01" className="w-32 text-right" value={editData.subtotal ?? ''} onChange={(e) => setEditData({ ...editData, subtotal: parseFloat(e.target.value) || 0 })} /></div>
+                  <div className="flex items-center justify-between gap-4"><span className="text-sm text-muted-foreground">VAT</span><Input type="number" step="0.01" className="w-32 text-right" value={editData.vat ?? ''} onChange={(e) => setEditData({ ...editData, vat: parseFloat(e.target.value) || 0 })} /></div>
+                  <div className="flex items-center justify-between gap-4 border-t pt-2 mt-2"><span className="text-sm font-bold">Total</span><Input type="number" step="0.01" className="w-32 text-right font-bold" value={editData.total ?? ''} onChange={(e) => setEditData({ ...editData, total: parseFloat(e.target.value) || 0 })} /></div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(invoice.subtotal ?? 0, invoice.currency ?? 'EUR')}</span></div>
+                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">VAT</span><span>{formatCurrency(invoice.vat ?? 0, invoice.currency ?? 'EUR')}</span></div>
+                  <div className="flex justify-between text-sm font-bold border-t pt-2 mt-2"><span>Total</span><span>{formatCurrency(invoice.total ?? 0, invoice.currency ?? 'EUR')}</span></div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Activity Log — right column */}
         <Card>
           <CardHeader><CardTitle className="text-sm">Activity</CardTitle></CardHeader>
           <CardContent>
@@ -180,111 +345,48 @@ const InvoiceDetail = () => {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard title="Vendor" value={invoice.vendor_name} icon={<User className="h-5 w-5 text-primary" />} />
-          <KpiCard title="Total" value={`${invoice.currency}${invoice.total?.toLocaleString()}`} icon={<DollarSign className="h-5 w-5 text-primary" />} />
-          <KpiCard title="Project" value={(invoice as any).project?.name ?? 'Unassigned'} icon={<FolderOpen className="h-5 w-5 text-muted-foreground" />} />
-          <KpiCard title="Category" value={(invoice as any).category?.name ?? 'Uncategorized'} icon={<Tag className="h-5 w-5 text-muted-foreground" />} />
-        </div>
+        </div>{/* end grid */}
 
-        {/* Assign dropdowns */}
-        <div className="flex flex-wrap gap-4">
-          <div className="space-y-1">
-            <Label className="text-xs">Assign Project</Label>
-            <Select value={invoice.project_id ?? ''} onValueChange={assignProject}>
-              <SelectTrigger className="w-48"><SelectValue placeholder="Select project" /></SelectTrigger>
-              <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Assign Category</Label>
-            <Select value={invoice.category_id?.toString() ?? ''} onValueChange={assignCategory}>
-              <SelectTrigger className="w-48"><SelectValue placeholder="Select category" /></SelectTrigger>
-              <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Document viewer */}
+        {/* Document viewer — AT THE BOTTOM */}
         {invoice.document_path && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-2">
                 <FileText className="h-4 w-4" /> Attachment
               </CardTitle>
-              {documentUrl && (
+              {downloadUrl && (
                 <Button variant="outline" size="sm" asChild>
-                  <a href={documentUrl} target="_blank" rel="noopener noreferrer"><Download className="mr-1 h-4 w-4" /> Download</a>
+                  <a href={downloadUrl} target="_blank" rel="noopener noreferrer"><Download className="mr-1 h-4 w-4" /> Download</a>
                 </Button>
               )}
             </CardHeader>
             <CardContent>
               {isPdf && documentUrl ? (
                 <iframe
-                  src={documentUrl}
-                  className="h-[600px] w-full rounded-lg border"
+                  src={`${documentUrl}#toolbar=0&navpanes=0&view=FitH`}
+                  className="h-[700px] w-full rounded-lg border"
                   title="Invoice PDF"
+                />
+              ) : isImage && documentUrl ? (
+                <img
+                  src={documentUrl}
+                  alt="Invoice attachment"
+                  className="max-w-full rounded-lg border"
                 />
               ) : documentUrl ? (
                 <div className="flex flex-col items-center gap-3 py-8">
                   <FileText className="h-12 w-12 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">Preview not available for this file type.</p>
                   <Button variant="outline" size="sm" asChild>
-                    <a href={documentUrl} target="_blank" rel="noopener noreferrer"><Download className="mr-1 h-4 w-4" /> Download File</a>
+                    <a href={downloadUrl ?? documentUrl} target="_blank" rel="noopener noreferrer"><Download className="mr-1 h-4 w-4" /> Download File</a>
                   </Button>
                 </div>
               ) : (
-                <p className="py-6 text-center text-sm text-muted-foreground">Loading document...</p>
+                <p className="py-6 text-center text-sm text-muted-foreground">Unable to load document. The file may have been moved or is unavailable.</p>
               )}
             </CardContent>
           </Card>
         )}
-
-        {/* Detail card */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-sm">Details</CardTitle>
-            {editing && (
-              <div className="flex gap-2">
-                <Button size="sm" onClick={saveEdit}><Check className="mr-1 h-3.5 w-3.5" /> Save</Button>
-                <Button variant="ghost" size="sm" onClick={() => setEditing(false)}><X className="mr-1 h-3.5 w-3.5" /> Cancel</Button>
-              </div>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label className="text-xs text-muted-foreground">Description</Label>
-                {editing ? (
-                  <Input value={editData.description ?? ''} onChange={(e) => setEditData({ ...editData, description: e.target.value })} />
-                ) : (
-                  <p className="text-sm">{invoice.description || '—'}</p>
-                )}
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Line Items</Label>
-                {editing ? (
-                  <Input value={editData.line_items ?? ''} onChange={(e) => setEditData({ ...editData, line_items: e.target.value })} />
-                ) : (
-                  <p className="text-sm">{invoice.line_items || '—'}</p>
-                )}
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Due Date</Label>
-                {editing ? (
-                  <Input type="date" value={editData.due_date ?? ''} onChange={(e) => setEditData({ ...editData, due_date: e.target.value })} />
-                ) : (
-                  <p className="text-sm">{invoice.due_date || '—'}</p>
-                )}
-              </div>
-            </div>
-            <div className="border-t pt-4">
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span>{invoice.currency}{invoice.subtotal?.toLocaleString()}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">VAT</span><span>{invoice.currency}{invoice.vat?.toLocaleString()}</span></div>
-              <div className="flex justify-between text-sm font-bold border-t pt-2 mt-2"><span>Total</span><span>{invoice.currency}{invoice.total?.toLocaleString()}</span></div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Delete confirmation modal */}
         <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>

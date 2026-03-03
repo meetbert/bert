@@ -1,77 +1,227 @@
-import { useState } from 'react';
-import { MessageCircle, Send } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { MessageCircle, Send, X, Paperclip, FileText, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+
+const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
+const ACCEPTED = '.pdf,.jpg,.jpeg,.png,.webp';
 
 type Message = { role: 'user' | 'assistant'; text: string };
 
-const placeholderMessages: Message[] = [
-  { role: 'assistant', text: 'Hi! I can help you find invoices, check budgets, or answer questions about your spending. Try asking something like "How much did we spend last month?"' },
-];
+const PANEL_WIDTH = 'sm:w-[400px]';
 
 export const ChatButton = () => {
+  const { session } = useAuth();
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>(placeholderMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const send = () => {
-    if (!input.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      { role: 'user', text: input.trim() },
-      { role: 'assistant', text: "I'm a placeholder — backend integration coming soon! For now, check the Dashboard for your latest data." },
+  // Load chat history from Supabase on first open
+  useEffect(() => {
+    if (!open || historyLoaded || !session) return;
+
+    const loadHistory = async () => {
+      const { data } = await supabase
+        .from('chat_messages')
+        .select('role, content')
+        .order('created_at', { ascending: true })
+        .limit(50);
+
+      if (data && data.length > 0) {
+        setMessages(data.map((m: any) => ({ role: m.role, text: m.content })));
+      } else {
+        setMessages([
+          { role: 'assistant', text: 'Hi! I can help you process invoices. Attach a PDF or image to get started, or ask a question.' },
+        ]);
+      }
+      setHistoryLoaded(true);
+    };
+
+    loadHistory();
+  }, [open, historyLoaded, session]);
+
+  useEffect(() => {
+    const wrapper = document.getElementById('app-content');
+    wrapper?.classList.toggle('chat-open', open);
+    return () => wrapper?.classList.remove('chat-open');
+  }, [open]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const clearChat = async () => {
+    const userId = session?.user?.id;
+    if (userId) {
+      await supabase.from('chat_messages').delete().eq('user_id', userId);
+    }
+    setMessages([
+      { role: 'assistant', text: 'Hi! I can help you process invoices. Attach a PDF or image to get started, or ask a question.' },
     ]);
+  };
+
+  const sendMessage = async () => {
+    const text = input.trim();
+    if ((!text && !file) || !session?.access_token) return;
+
+    // Build user-facing text
+    const userText = file
+      ? file.name + (text ? ` — "${text}"` : '')
+      : text;
+    setMessages((prev) => [...prev, { role: 'user', text: userText }]);
+    setLoading(true);
     setInput('');
+    const uploadedFile = file;
+    setFile(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('message', text || '');
+      if (uploadedFile) {
+        formData.append('file', uploadedFile);
+      }
+
+      const resp = await fetch(`${BACKEND}/api/chat`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: formData,
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: 'Request failed' }));
+        const detail = err.detail;
+        const errMsg = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map((d: any) => d.msg).join(', ') : 'Something went wrong.';
+        setMessages((prev) => [...prev, { role: 'assistant', text: `Error: ${errMsg}` }]);
+        return;
+      }
+
+      const data = await resp.json();
+      setMessages((prev) => [...prev, { role: 'assistant', text: data.response }]);
+    } catch {
+      setMessages((prev) => [...prev, { role: 'assistant', text: 'Could not reach the server. Is the backend running?' }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
+    sendMessage();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (selected) setFile(selected);
+    e.target.value = '';
   };
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
-        aria-label="Open chat"
+      {!open && (
+        <button
+          onClick={() => setOpen(true)}
+          className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
+          aria-label="Open chat"
+        >
+          <MessageCircle className="h-6 w-6" />
+        </button>
+      )}
+
+      <div
+        className={`fixed inset-y-0 right-0 z-40 flex w-full ${PANEL_WIDTH} flex-col border-l bg-background shadow-xl transition-transform duration-300 ease-in-out ${
+          open ? 'translate-x-0' : 'translate-x-full'
+        }`}
       >
-        <MessageCircle className="h-6 w-6" />
-      </button>
+        {/* Header */}
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <h2 className="text-base font-semibold">Talk to Bert!</h2>
+          <div className="flex items-center gap-1">
+            <button onClick={clearChat} className="rounded-sm p-1 opacity-70 hover:opacity-100" title="Clear chat">
+              <Trash2 className="h-4 w-4" />
+            </button>
+            <button onClick={() => setOpen(false)} className="rounded-sm p-1 opacity-70 hover:opacity-100">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
 
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent className="flex w-full flex-col sm:max-w-md p-0">
-          <SheetHeader className="border-b px-6 py-4">
-            <div className="flex items-center justify-between">
-              <SheetTitle className="text-base">Ask about your invoices</SheetTitle>
-            </div>
-          </SheetHeader>
-
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-            {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
-                  m.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-secondary text-secondary-foreground'
-                }`}>
-                  {m.text}
-                </div>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {messages.map((m, i) => (
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                m.role === 'user'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary text-secondary-foreground'
+              }`}>
+                {m.text}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
+          {loading && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-2 rounded-2xl bg-secondary px-4 py-2.5 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Processing...
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
 
-          <div className="border-t px-4 py-3">
-            <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask a question..."
-                className="flex-1"
-              />
-              <Button type="submit" size="icon" disabled={!input.trim()}>
-                <Send className="h-4 w-4" />
-              </Button>
-            </form>
-          </div>
-        </SheetContent>
-      </Sheet>
+        {/* Input */}
+        <div className="border-t px-4 py-3">
+          {/* File preview chip */}
+          {file && (
+            <div className="mb-2">
+              <div className="inline-flex items-center gap-2 rounded-lg border bg-secondary/50 px-3 py-1.5 text-xs">
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="max-w-[200px] truncate">{file.name}</span>
+                <button onClick={() => setFile(null)} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          )}
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED}
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              className="shrink-0"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={file ? 'Add a note (optional)...' : 'Ask a question...'}
+              className="flex-1"
+              disabled={loading}
+            />
+            <Button type="submit" size="icon" disabled={loading || (!input.trim() && !file)}>
+              <Send className="h-4 w-4" />
+            </Button>
+          </form>
+        </div>
+      </div>
     </>
   );
 };

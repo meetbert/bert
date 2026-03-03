@@ -11,7 +11,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className }) =
     paid: 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]',
     unpaid: 'bg-destructive text-destructive-foreground',
     overdue: 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]',
-    Active: 'bg-secondary text-secondary-foreground',
+    Active: 'bg-primary text-primary-foreground',
     Completed: 'bg-foreground text-background',
   };
 

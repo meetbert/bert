@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { Invoice, Project } from '@/types/database';
+import { Invoice, Project, Category } from '@/types/database';
 import { Navbar } from '@/components/Navbar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
@@ -9,20 +9,18 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-
 import { FileText, DollarSign, FolderOpen, AlertCircle, Clock, CalendarDays, TrendingUp, AlertTriangle } from 'lucide-react';
 import { CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
 
-const CURRENCY = 'GBP';
-
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { baseCurrency } = useUserSettings();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [projectCategories, setProjectCategories] = useState<{ project_id: string; category_id: string; budget: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('6m');
   const [kpiFilter, setKpiFilter] = useState<string | null>(null);
@@ -30,12 +28,22 @@ const Dashboard = () => {
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
-    const [invRes, projRes] = await Promise.all([
+    const [invRes, projRes, catRes, pcRes] = await Promise.all([
       supabase.from('invoices').select('*'),
       supabase.from('projects').select('*'),
+      supabase.from('invoice_categories').select('*'),
+      supabase.from('project_categories').select('*'),
     ]);
-    setInvoices(invRes.data ?? []);
+    const today = new Date().toISOString().split('T')[0];
+    const enriched = (invRes.data ?? []).map((inv: any) => {
+      let status = inv.payment_status;
+      if (status === 'unpaid' && inv.due_date && inv.due_date < today) status = 'overdue';
+      return { ...inv, payment_status: status };
+    });
+    setInvoices(enriched);
     setProjects(projRes.data ?? []);
+    setCategories(catRes.data ?? []);
+    setProjectCategories(pcRes.data ?? []);
     setLoading(false);
   };
 
@@ -61,12 +69,18 @@ const Dashboard = () => {
 
   const monthlyMap: Record<string, number> = {};
   invoices.forEach((i) => {
-    const month = i.invoice_date?.slice(0, 7) ?? 'Unknown';
+    if (!i.invoice_date) return;
+    const month = i.invoice_date.slice(0, 7);
     if (month >= cutoffStr) {
       monthlyMap[month] = (monthlyMap[month] ?? 0) + (i.total ?? 0);
     }
   });
-  const monthlySpend = Object.entries(monthlyMap).sort().map(([month, value]) => ({ month, value }));
+  const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthlySpend = Object.entries(monthlyMap).sort().map(([month, value]) => {
+    const [y, m] = month.split('-');
+    const label = m ? `${SHORT_MONTHS[parseInt(m, 10) - 1]} ${y.slice(2)}` : month;
+    return { month: label, value };
+  });
   const avgMonthly = monthlySpend.length > 0 ? monthlySpend.reduce((s, m) => s + m.value, 0) / monthlySpend.length : 0;
   const monthlyWithBurnRate = monthlySpend.map((m) => ({ ...m, burnRate: Math.round(avgMonthly) }));
 
@@ -108,52 +122,59 @@ const Dashboard = () => {
         <h1 className="text-2xl font-bold">Dashboard</h1>
 
         {/* KPI Row */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <button onClick={() => setKpiFilter(null)} className="text-left">
-            <Card className={`transition-shadow hover:shadow-md ${kpiFilter === null ? 'ring-2 ring-primary' : ''}`}>
-              <CardContent className="flex items-center gap-4 p-5">
+            <Card className={`h-full transition-shadow hover:shadow-md ${kpiFilter === null ? 'ring-2 ring-primary' : ''}`}>
+              <CardContent className="flex items-center gap-3 p-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary"><FolderOpen className="h-5 w-5 text-primary" /></div>
-                <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active Projects</p><p className="text-2xl font-bold">{activeProjects.length}</p></div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active Projects</p>
+                  <p className="text-xl font-bold">{activeProjects.length}</p>
+                </div>
               </CardContent>
             </Card>
           </button>
           <button onClick={() => setKpiFilter('unpaid')} className="text-left">
-            <Card className={`transition-shadow hover:shadow-md ${kpiFilter === 'unpaid' ? 'ring-2 ring-primary' : ''}`}>
-              <CardContent className="flex items-center gap-4 p-5">
+            <Card className={`h-full transition-shadow hover:shadow-md ${kpiFilter === 'unpaid' ? 'ring-2 ring-primary' : ''}`}>
+              <CardContent className="flex items-center gap-3 p-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary"><Clock className="h-5 w-5 text-muted-foreground" /></div>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Unpaid</p>
-                  <p className="text-sm text-muted-foreground">{unpaid.length} invoice{unpaid.length !== 1 ? 's' : ''}</p>
-                  <p className="text-xl font-bold">{formatCurrency(totalUnpaid, CURRENCY)}</p>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Unpaid ({unpaid.length})</p>
+                  <p className="text-xl font-bold truncate">{formatCurrency(totalUnpaid, baseCurrency)}</p>
                 </div>
               </CardContent>
             </Card>
           </button>
           <button onClick={() => setKpiFilter('overdue')} className="text-left">
-            <Card className={`transition-shadow hover:shadow-md ${kpiFilter === 'overdue' ? 'ring-2 ring-primary' : ''}`}>
-              <CardContent className="flex items-center gap-4 p-5">
+            <Card className={`h-full transition-shadow hover:shadow-md ${kpiFilter === 'overdue' ? 'ring-2 ring-primary' : ''}`}>
+              <CardContent className="flex items-center gap-3 p-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10"><AlertCircle className="h-5 w-5 text-destructive" /></div>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Overdue</p>
-                  <p className="text-sm text-destructive/80">{overdue.length} invoice{overdue.length !== 1 ? 's' : ''}</p>
-                  <p className="text-xl font-bold text-destructive">{formatCurrency(totalOverdue, CURRENCY)}</p>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Overdue ({overdue.length})</p>
+                  <p className="text-xl font-bold truncate text-destructive">{formatCurrency(totalOverdue, baseCurrency)}</p>
                 </div>
               </CardContent>
             </Card>
           </button>
           <button onClick={() => setKpiFilter('outstanding')} className="text-left">
-            <Card className={`transition-shadow hover:shadow-md ${kpiFilter === 'outstanding' ? 'ring-2 ring-primary' : ''}`}>
-              <CardContent className="flex items-center gap-4 p-5">
+            <Card className={`h-full transition-shadow hover:shadow-md ${kpiFilter === 'outstanding' ? 'ring-2 ring-primary' : ''}`}>
+              <CardContent className="flex items-center gap-3 p-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary"><DollarSign className="h-5 w-5 text-primary" /></div>
-                <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Outstanding</p><p className="text-xl font-bold">{formatCurrency(totalOutstanding, CURRENCY)}</p></div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Outstanding</p>
+                  <p className="text-xl font-bold truncate">{formatCurrency(totalOutstanding, baseCurrency)}</p>
+                </div>
               </CardContent>
             </Card>
           </button>
           <button onClick={() => setKpiFilter('dueThisWeek')} className="text-left">
-            <Card className={`transition-shadow hover:shadow-md ${kpiFilter === 'dueThisWeek' ? 'ring-2 ring-primary' : ''}`}>
-              <CardContent className="flex items-center gap-4 p-5">
+            <Card className={`h-full transition-shadow hover:shadow-md ${kpiFilter === 'dueThisWeek' ? 'ring-2 ring-primary' : ''}`}>
+              <CardContent className="flex items-center gap-3 p-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary"><CalendarDays className="h-5 w-5 text-muted-foreground" /></div>
-                <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Due This Week</p><p className="text-2xl font-bold">{dueThisWeek.length}</p></div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Due This Week</p>
+                  <p className="text-xl font-bold">{dueThisWeek.length}</p>
+                </div>
               </CardContent>
             </Card>
           </button>
@@ -161,43 +182,40 @@ const Dashboard = () => {
 
         {/* Filtered invoice list from KPI click */}
         {filteredInvoices && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm capitalize">{kpiFilter === 'dueThisWeek' ? 'Due This Week' : kpiFilter === 'outstanding' ? 'Outstanding Invoices' : `${kpiFilter} Invoices`}</CardTitle>
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold capitalize">{kpiFilter === 'dueThisWeek' ? 'Due This Week' : kpiFilter === 'outstanding' ? 'Outstanding Invoices' : `${kpiFilter} Invoices`}</h2>
               <Button variant="ghost" size="sm" onClick={() => setKpiFilter(null)}>Clear</Button>
-            </CardHeader>
-            <CardContent>
-              {filteredInvoices.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">No invoices in this category.</p>
-              ) : (
-                <div className="space-y-2">
-                  {filteredInvoices.slice(0, 10).map((inv) => (
-                    <Link key={inv.id} to={`/invoices/${inv.id}`} className="flex items-center justify-between rounded-lg border p-3 text-sm transition-colors hover:bg-secondary/50">
-                      <div className="flex items-center gap-3">
-                        <span className="font-medium">{inv.vendor_name}</span>
-                        <StatusBadge status={inv.payment_status} />
-                      </div>
-                      <span className="font-medium">{formatCurrency(inv.total ?? 0, CURRENCY)}</span>
-                    </Link>
-                  ))}
-                  {filteredInvoices.length > 10 && (
+            </div>
+            {filteredInvoices.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No invoices in this category.</p>
+            ) : (
+              <div className="overflow-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b bg-secondary/30 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    <th className="p-3">Vendor</th><th className="p-3">Due Date</th><th className="p-3">Total</th><th className="p-3">Status</th>
+                  </tr></thead>
+                  <tbody>
+                    {filteredInvoices.slice(0, 10).map((inv) => (
+                      <tr key={inv.id} onClick={() => navigate(`/invoices/${inv.id}`)} className="border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60">
+                        <td className="p-3 font-medium">{inv.vendor_name}</td>
+                        <td className="p-3 text-muted-foreground">{inv.due_date ?? '—'}</td>
+                        <td className="p-3 font-medium">{formatCurrency(inv.total ?? 0, baseCurrency)}</td>
+                        <td className="p-3"><StatusBadge status={inv.payment_status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filteredInvoices.length > 10 && (
+                  <div className="border-t p-2">
                     <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate('/invoices')}>View all →</Button>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
-        {/* Overdue alert */}
-        {overdue.length > 0 && !kpiFilter && (
-          <button onClick={() => setKpiFilter('overdue')} className="w-full text-left">
-            <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 transition-colors hover:bg-destructive/10">
-              <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
-              <p className="text-sm font-medium">{overdue.length} overdue invoice{overdue.length > 1 ? 's' : ''} ({formatCurrency(totalOverdue, CURRENCY)}) require attention</p>
-            </div>
-          </button>
-        )}
 
         {/* Monthly Spend Chart */}
         {!kpiFilter && (
@@ -205,7 +223,7 @@ const Dashboard = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-sm">Monthly Spend</CardTitle>
               <Select value={timeRange} onValueChange={setTimeRange}>
-                <SelectTrigger className="h-8 w-24"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 w-[110px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="3m">3 months</SelectItem>
                   <SelectItem value="6m">6 months</SelectItem>
@@ -222,7 +240,7 @@ const Dashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
                     <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-                    <RechartsTooltip formatter={(v: number) => formatCurrency(v, CURRENCY)} />
+                    <RechartsTooltip formatter={(v: number) => formatCurrency(v, baseCurrency)} />
                     <Line type="monotone" dataKey="value" name="Spend" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
                     <Line type="monotone" dataKey="burnRate" name="Avg Burn Rate" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
                   </LineChart>
@@ -232,59 +250,90 @@ const Dashboard = () => {
           </Card>
         )}
 
-        {/* Project budget cards — active only */}
+        {/* Project budgets — per-category progress bars */}
         {activeProjects.length > 0 && !kpiFilter && (
           <div>
             <h2 className="mb-4 text-lg font-semibold">Project Budgets</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 lg:grid-cols-2">
               {activeProjects.map((p) => {
-                const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + (i.total ?? 0), 0);
+                const projectInvoices = invoices.filter((i) => i.project_id === p.id);
+                const spent = projectInvoices.reduce((s, i) => s + (i.total ?? 0), 0);
                 const pct = hasBudget(p) ? (spent / p.budget!) * 100 : 0;
                 const isOverBudget = pct > 100;
-                const overAmount = isOverBudget ? spent - p.budget! : 0;
-                const getBudgetColor = () => {
-                  if (pct >= 100) return 'text-destructive';
-                  if (pct >= 90) return 'text-destructive';
-                  if (pct >= 75) return 'text-amber-500';
-                  return 'text-muted-foreground';
-                };
-                const progressValue = Math.min(pct, 100);
-                const progressClass = pct >= 90 ? '[&>div]:bg-destructive' : pct >= 75 ? '[&>div]:bg-amber-500' : '';
+
+                // Per-category spend — seed with categories assigned to this project
+                const catMap: Record<string, number> = {};
+                const projCatIds = projectCategories.filter(pc => pc.project_id === p.id).map(pc => pc.category_id);
+                projCatIds.forEach((cid) => { catMap[cid] = 0; });
+                projectInvoices.forEach((i) => {
+                  const cid = i.category_id ?? '__uncategorized';
+                  catMap[cid] = (catMap[cid] ?? 0) + (i.total ?? 0);
+                });
+                const catRows = Object.entries(catMap)
+                  .map(([cid, amount]) => ({
+                    id: cid,
+                    name: cid === '__uncategorized' ? 'Uncategorized' : categories.find(c => c.id === cid)?.name ?? 'Unknown',
+                    amount,
+                    pct: hasBudget(p) ? (amount / p.budget!) * 100 : (spent > 0 ? (amount / spent) * 100 : 0),
+                  }))
+                  .sort((a, b) => b.amount - a.amount);
 
                 return (
                   <Link key={p.id} to={`/projects/${p.id}`}>
-                    <Card className={`cursor-pointer transition-shadow hover:shadow-md ${isOverBudget ? 'border-destructive/40' : ''}`}>
+                    <Card className={`h-full cursor-pointer transition-shadow hover:shadow-md ${isOverBudget ? 'border-destructive/40' : ''}`}>
                       <CardContent className="p-5">
+                        {/* Header */}
                         <div className="flex items-center justify-between">
-                          <h3 className="font-semibold">{p.name}</h3>
-                          {isOverBudget && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="flex items-center gap-1 text-xs font-medium text-destructive">
-                                  <AlertTriangle className="h-3.5 w-3.5" /> Over budget
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>{formatCurrency(overAmount, CURRENCY)} over budget</TooltipContent>
-                            </Tooltip>
-                          )}
-                          {!isOverBudget && <StatusBadge status={p.status} />}
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold">{p.name}</h3>
+                            {isOverBudget && (
+                              <span className="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
+                                <AlertTriangle className="h-3 w-3" /> Over
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {formatCurrency(spent, baseCurrency)}{hasBudget(p) && <> / {formatCurrency(p.budget!, baseCurrency)}</>}
+                          </span>
                         </div>
-                        {hasBudget(p) ? (
-                          <>
-                            <Progress value={progressValue} className={`mt-3 ${progressClass}`} />
-                            <div className="mt-2 flex justify-between text-xs">
-                              <span className="text-muted-foreground">{formatCurrency(spent, CURRENCY)}</span>
-                              <span className={getBudgetColor()}>{Math.round(pct)}% of {formatCurrency(p.budget!, CURRENCY)}</span>
+
+                        {/* Overall progress */}
+                        {hasBudget(p) && (
+                          <div className="mt-3">
+                            <div className={`flex h-1.5 w-full overflow-hidden rounded-full bg-secondary`}>
+                              <div
+                                className="rounded-full transition-all bg-primary"
+                                style={{ width: `${Math.min(pct, 100)}%` }}
+                              />
                             </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="mt-3 h-2 rounded-full border border-dashed border-muted-foreground/30" />
-                            <div className="mt-2 flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">{formatCurrency(spent, CURRENCY)} spent</span>
-                              <span className="text-primary hover:underline">Set budget →</span>
-                            </div>
-                          </>
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              {Math.round(pct)}% used
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Category breakdown bars */}
+                        {catRows.length > 0 && (
+                          <div className="mt-4 space-y-2.5">
+                            {catRows.map((cat) => (
+                              <div key={cat.id}>
+                                <div className="flex items-center justify-between text-xs mb-1">
+                                  <span className="text-muted-foreground">{cat.name}</span>
+                                  <span className="font-medium">{formatCurrency(cat.amount, baseCurrency)}</span>
+                                </div>
+                                <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                                  <div
+                                    className="h-full rounded-full bg-muted-foreground/40 transition-all"
+                                    style={{ width: `${cat.pct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {!hasBudget(p) && catRows.length === 0 && (
+                          <p className="mt-3 text-xs text-muted-foreground">No spend yet</p>
                         )}
                       </CardContent>
                     </Card>
@@ -295,64 +344,7 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Upcoming & Overdue */}
-        {!kpiFilter && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader><CardTitle className="text-sm text-destructive">Overdue</CardTitle></CardHeader>
-              <CardContent>
-                {overdue.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground">No overdue invoices 🎉</p>
-                ) : (
-                  <div className="space-y-2">
-                    {overdue.map((inv) => (
-                      <Link key={inv.id} to={`/invoices/${inv.id}`} className="flex items-center justify-between rounded-lg border border-destructive/20 p-3 text-sm hover:bg-secondary/50">
-                        <span className="font-medium">{inv.vendor_name}</span>
-                        <span className="text-destructive">{formatCurrency(inv.total ?? 0, CURRENCY)}</span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Upcoming (30 days)</CardTitle></CardHeader>
-              <CardContent>
-                {(() => {
-                  const thirtyDaysLater = new Date(now.getTime() + 30 * 86400000);
-                  const upcoming30 = invoices
-                    .filter((i) => {
-                      if (i.payment_status === 'paid' || !i.due_date) return false;
-                      const d = new Date(i.due_date);
-                      return d > now && d <= thirtyDaysLater;
-                    })
-                    .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''));
-                  return upcoming30.length === 0 ? (
-                    <EmptyState icon={CalendarDays} title="Nothing due soon" description="No invoices due in the next 30 days." />
-                  ) : (
-                    <div className="space-y-2">
-                      {upcoming30.map((inv) => (
-                        <Link key={inv.id} to={`/invoices/${inv.id}`} className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-secondary/50">
-                          <span className="font-medium">{inv.vendor_name}</span>
-                          <div className="flex items-center gap-3">
-                            <span className="font-medium">{formatCurrency(inv.total ?? 0, CURRENCY)}</span>
-                            <span className="text-xs text-muted-foreground">{inv.due_date}</span>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Empty state */}
-        {invoices.length === 0 && (
-          <EmptyState icon={FileText} title="No invoices yet" description="Connect your inbox or upload invoices to get started." />
-        )}
       </div>
     </div>
   );

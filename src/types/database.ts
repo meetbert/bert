@@ -2,52 +2,69 @@ export interface Project {
   id: string;
   name: string;
   budget: number;
-  status: 'Active' | 'Completed';
+  status: 'Active' | 'Completed' | 'Archived';
+  description: string | null;
+  known_vendors: string[];
+  known_locations: string[];
   created_at: string;
 }
 
 export interface Category {
-  id: number;
+  id: string;
   name: string;
 }
 
 export interface Invoice {
   id: string;
-  vendor_name: string;
-  invoice_date: string;
-  invoice_number: string;
-  currency: string;
-  subtotal: number;
-  vat: number;
-  total: number;
+  vendor_name: string | null;
+  invoice_date: string | null;
+  invoice_number: string | null;
+  currency: string | null;
+  subtotal: number | null;
+  vat: number | null;
+  total: number | null;
   due_date: string | null;
-  payment_terms: string | null;
   description: string | null;
-  line_items: string | null;
+  line_items: any | null;
   project_id: string | null;
-  category_id: number | null;
+  category_id: string | null;
   document_path: string | null;
-  processed_at: string | null;
-  payment_status: 'unpaid' | 'paid' | 'overdue';
-  document_type: string;
+  document_hash: string | null;
+  processing_status: 'awaiting_info' | 'complete';
+  payment_status: 'unpaid' | 'paid' | 'overdue' | 'partially_paid';
+  follow_up_count: number;
+  last_followed_up_at: string | null;
+  human_notified_at: string | null;
   created_at: string;
+  updated_at: string | null;
   // Joined fields
   project?: Project;
   category?: Category;
 }
 
-export interface VendorMapping {
-  id: number;
-  vendor_name: string;
-  project_id: string;
-}
-
 export interface UserSettings {
   id: string;
   company_name: string | null;
-  email_address: string | null;
-  email_provider: 'gmail' | 'outlook' | 'other' | null;
-  onboarding_done: boolean;
   base_currency: string;
+  agentmail_inbox: string | null;
+  max_followups: number;
+  notification_channel: 'email' | 'none';
+  onboarding_done: boolean;
   created_at: string;
+}
+
+export interface ProjectCategory {
+  id: string;
+  project_id: string;
+  category_id: string;
+  budget: number;
+  created_at: string;
+}
+
+export interface ProjectDocument {
+  id: string;
+  project_id: string;
+  file_name: string;
+  storage_path: string;
+  uploaded_at: string;
 }

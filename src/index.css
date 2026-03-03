@@ -105,4 +105,12 @@
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', sans-serif;
   }
+
+  #app-content {
+    transition: margin-right 300ms ease-in-out;
+  }
+
+  #app-content.chat-open {
+    margin-right: 400px;
+  }
 }

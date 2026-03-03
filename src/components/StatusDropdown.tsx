@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
-const STATUSES = ['unpaid', 'paid', 'overdue'] as const;
+const STATUSES = ['unpaid', 'paid'] as const;
 
 interface StatusDropdownProps {
   status: string;

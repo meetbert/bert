@@ -12,7 +12,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, chat, dashboard, email_inbound, inbox, invoices, projects
+from app.routes import agentmail, chat, extract
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 
@@ -26,7 +26,7 @@ logging.basicConfig(
 
 app = FastAPI(
     title="Bert API",
-    description="Invoice processing and project management backend for Bert.",
+    description="Backend for Bert — agent webhook, chat.",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -60,14 +60,10 @@ app.add_middleware(
 
 API_PREFIX = "/api"
 
-app.include_router(invoices.router,       prefix=API_PREFIX)
-app.include_router(projects.router,       prefix=API_PREFIX)
-app.include_router(dashboard.router,      prefix=API_PREFIX)
-app.include_router(chat.router,           prefix=API_PREFIX)
-app.include_router(inbox.router,          prefix=API_PREFIX)
-app.include_router(email_inbound.router,  prefix=API_PREFIX)
-# Auth router has its own paths (must match Google Cloud Console redirect URI exactly)
-app.include_router(auth.router)
+app.include_router(chat.router,              prefix=API_PREFIX)
+app.include_router(extract.router,           prefix=API_PREFIX)
+# AgentMail webhook (no prefix — posts directly to /webhook/agentmail)
+app.include_router(agentmail.router)
 
 
 # ── Health check ─────────────────────────────────────────────────────────────
@@ -83,7 +79,7 @@ async def health():
 @app.on_event("startup")
 async def on_startup():
     """Seed fixed reference data on first boot."""
-    from app.db.crud import seed_categories
+    from app.db import seed_categories
     try:
         seed_categories()
         logging.getLogger(__name__).info("Categories seeded.")

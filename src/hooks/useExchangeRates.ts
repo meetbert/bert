@@ -15,6 +15,7 @@ export function useExchangeRates(baseCurrency: string) {
 
   useEffect(() => {
     if (!baseCurrency) return;
+    setRates({});
     setLoading(true);
     setError(false);
     fetch(`https://api.frankfurter.app/latest?from=${baseCurrency}`)

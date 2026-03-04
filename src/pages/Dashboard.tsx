@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { FileText, DollarSign, FolderOpen, AlertCircle, Clock, CalendarDays, TrendingUp, AlertTriangle } from 'lucide-react';
+import { FileText, FolderOpen, AlertCircle, Clock, CalendarDays, TrendingUp, AlertTriangle } from 'lucide-react';
 import { CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
@@ -54,7 +54,6 @@ const Dashboard = () => {
   const overdue = invoices.filter((i) => i.payment_status === 'overdue');
   const totalUnpaid = unpaid.reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
   const totalOverdue = overdue.reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
-  const totalOutstanding = totalUnpaid + totalOverdue;
 
   const now = new Date();
   const oneWeekLater = new Date(now.getTime() + 7 * 86400000);
@@ -91,7 +90,7 @@ const Dashboard = () => {
     if (kpiFilter === 'unpaid') return unpaid;
     if (kpiFilter === 'overdue') return overdue;
     if (kpiFilter === 'dueThisWeek') return dueThisWeek;
-    if (kpiFilter === 'outstanding') return [...unpaid, ...overdue];
+
     return null;
   };
 
@@ -106,7 +105,7 @@ const Dashboard = () => {
         <div className="container space-y-8 py-8">
           <Skeleton className="h-8 w-40" />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
             <Skeleton className="h-72 rounded-lg" />
@@ -124,7 +123,7 @@ const Dashboard = () => {
         <h1 className="text-2xl font-bold">Dashboard</h1>
 
         {/* KPI Row */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <button onClick={() => setKpiFilter(null)} className="text-left">
             <Card className={`h-full transition-shadow hover:shadow-md ${kpiFilter === null ? 'ring-2 ring-primary' : ''}`}>
               <CardContent className="flex items-center gap-3 p-4">
@@ -141,7 +140,7 @@ const Dashboard = () => {
               <CardContent className="flex items-center gap-3 p-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary"><Clock className="h-5 w-5 text-muted-foreground" /></div>
                 <div className="min-w-0">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Unpaid ({unpaid.length})</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Outstanding ({unpaid.length})</p>
                   <p className="text-xl font-bold truncate">{formatCurrency(totalUnpaid, baseCurrency)}</p>
                 </div>
               </CardContent>
@@ -154,17 +153,6 @@ const Dashboard = () => {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Overdue ({overdue.length})</p>
                   <p className="text-xl font-bold truncate text-destructive">{formatCurrency(totalOverdue, baseCurrency)}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </button>
-          <button onClick={() => setKpiFilter('outstanding')} className="text-left">
-            <Card className={`h-full transition-shadow hover:shadow-md ${kpiFilter === 'outstanding' ? 'ring-2 ring-primary' : ''}`}>
-              <CardContent className="flex items-center gap-3 p-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary"><DollarSign className="h-5 w-5 text-primary" /></div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Outstanding</p>
-                  <p className="text-xl font-bold truncate">{formatCurrency(totalOutstanding, baseCurrency)}</p>
                 </div>
               </CardContent>
             </Card>

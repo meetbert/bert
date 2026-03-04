@@ -8,13 +8,50 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { Upload, FileText, Table, Loader2 } from 'lucide-react';
+import { Upload, FileText, Table, Loader2, CheckCircle2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
-const ACCEPTED_FILES = '.pdf,.jpg,.jpeg,.png,.webp';
+const ACCEPTED_EXTS = '.pdf,.jpg,.jpeg,.png,.webp';
 const STORAGE_BUCKET = 'invoices-bucket';
 
-// ── CSV column auto-mapping ──────────────────────────────────────────────────
+// ── Image → PDF conversion ────────────────────────────────────────────────────
+
+async function imageToPdf(file: File): Promise<File> {
+  const { jsPDF } = await import('jspdf');
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  const pdf = new jsPDF({
+    orientation: bitmap.width > bitmap.height ? 'landscape' : 'portrait',
+    unit: 'px',
+    format: [bitmap.width, bitmap.height],
+  });
+  pdf.addImage(dataUrl, 'JPEG', 0, 0, bitmap.width, bitmap.height);
+  const blob = pdf.output('blob');
+  const pdfName = file.name.replace(/\.[^.]+$/, '.pdf');
+  return new File([blob], pdfName, { type: 'application/pdf' });
+}
+
+async function prepareFiles(rawFiles: File[]): Promise<File[]> {
+  const accepted = rawFiles.filter(f =>
+    /\.(pdf|jpe?g|png|webp)$/i.test(f.name) || f.type === 'application/pdf' || f.type.startsWith('image/')
+  );
+  const prepared: File[] = [];
+  for (const f of accepted) {
+    if (f.type.startsWith('image/') || /\.(jpe?g|png|webp)$/i.test(f.name)) {
+      prepared.push(await imageToPdf(f));
+    } else {
+      prepared.push(f);
+    }
+  }
+  return prepared;
+}
+
+// ── CSV column auto-mapping ───────────────────────────────────────────────────
 
 const AUTO_MAP: Record<string, string> = {
   vendor: 'vendor_name', supplier: 'vendor_name', vendor_name: 'vendor_name', company: 'vendor_name',
@@ -42,7 +79,7 @@ const FIELD_OPTIONS = [
   { value: 'skip',           label: '— Skip column —' },
 ];
 
-// ── CSV helpers ──────────────────────────────────────────────────────────────
+// ── CSV helpers ───────────────────────────────────────────────────────────────
 
 function parseCsv(text: string): { headers: string[]; rows: string[][] } {
   const lines = text.split('\n').filter(l => l.trim());
@@ -63,7 +100,7 @@ function splitCsvLine(line: string): string[] {
   return result;
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────────
 
 interface Props {
   open: boolean;
@@ -74,8 +111,13 @@ interface Props {
 export const ImportModal = ({ open, onClose, onImported }: Props) => {
   const { session, user } = useAuth();
 
-  // ── PDF state ──────────────────────────────────────────────────────────────
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  // ── Queue state ────────────────────────────────────────────────────────────
+  const [queue, setQueue] = useState<File[]>([]);
+  const [queueIdx, setQueueIdx] = useState(0);
+  const [converting, setConverting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // ── Per-file extraction state ──────────────────────────────────────────────
   const [extracting, setExtracting] = useState(false);
   const [extracted, setExtracted] = useState<Record<string, any> | null>(null);
   const [editFields, setEditFields] = useState<Record<string, any>>({});
@@ -91,33 +133,59 @@ export const ImportModal = ({ open, onClose, onImported }: Props) => {
   const authHeader = () =>
     session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
-  // ── PDF: upload to storage → extract → show preview ────────────────────────
+  // ── File intake (drag-drop or click) ──────────────────────────────────────
 
-  const handleExtract = async () => {
-    if (!pdfFile || !user) return;
+  const handleFiles = async (rawFiles: FileList | File[]) => {
+    const files = Array.from(rawFiles);
+    if (!files.length) return;
+
+    setConverting(true);
+    setExtracted(null);
+    setEditFields({});
+
+    let prepared: File[] = [];
+    try {
+      prepared = await prepareFiles(files);
+    } catch {
+      toast({ title: 'Conversion failed', description: 'Could not convert one or more images.', variant: 'destructive' });
+    }
+    setConverting(false);
+
+    if (!prepared.length) {
+      toast({ title: 'No valid files', description: 'Please upload PDF, JPG, PNG, or WebP files.', variant: 'destructive' });
+      return;
+    }
+
+    setQueue(prepared);
+    setQueueIdx(0);
+    extractFile(prepared, 0);
+  };
+
+  // ── Extraction ─────────────────────────────────────────────────────────────
+
+  const extractFile = async (files: File[], idx: number) => {
+    const file = files[idx];
+    if (!file || !user) return;
     setExtracting(true);
+    setExtracted(null);
+    setEditFields({});
 
     try {
-      // 1. Upload to Supabase Storage
-      const storagePath = `${user.id}/imports/${Date.now()}_${pdfFile.name}`;
+      const storagePath = `${user.id}/imports/${Date.now()}_${file.name}`;
       const { error: uploadErr } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .upload(storagePath, pdfFile, { upsert: true });
-
+        .upload(storagePath, file, { upsert: true });
       if (uploadErr) throw new Error(`Upload failed: ${uploadErr.message}`);
 
-      // 2. Call backend extraction
       const resp = await fetch(`${BACKEND}/api/extract`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({ attachment_path: storagePath }),
       });
-
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.detail ?? 'Extraction failed');
       if (data.not_invoice) throw new Error('This file does not appear to be an invoice.');
 
-      // 3. Store extracted data + storage path for later insert
       setExtracted({ ...data, document_path: storagePath });
       setEditFields({ ...data, document_path: storagePath });
     } catch (e: any) {
@@ -126,6 +194,8 @@ export const ImportModal = ({ open, onClose, onImported }: Props) => {
       setExtracting(false);
     }
   };
+
+  // ── Save & advance ─────────────────────────────────────────────────────────
 
   const handleConfirmInsert = async () => {
     if (!user) return;
@@ -149,11 +219,10 @@ export const ImportModal = ({ open, onClose, onImported }: Props) => {
         payment_status: 'unpaid',
         processing_status: 'complete',
       });
-
       if (error) throw new Error(error.message);
-      toast({ title: 'Invoice imported', description: `${editFields.vendor_name ?? 'Invoice'} added successfully.` });
+
       onImported();
-      handleClose();
+      advanceOrClose(queue, queueIdx, `${editFields.vendor_name ?? 'Invoice'} saved.`);
     } catch (e: any) {
       toast({ title: 'Insert failed', description: e.message, variant: 'destructive' });
     } finally {
@@ -161,7 +230,31 @@ export const ImportModal = ({ open, onClose, onImported }: Props) => {
     }
   };
 
-  // ── CSV: parse → map → insert ──────────────────────────────────────────────
+  const advanceOrClose = (files: File[], idx: number, savedMsg?: string) => {
+    const nextIdx = idx + 1;
+    if (nextIdx < files.length) {
+      if (savedMsg) toast({ title: `File ${idx + 1} of ${files.length} done`, description: `Processing next file…` });
+      setQueueIdx(nextIdx);
+      extractFile(files, nextIdx);
+    } else {
+      if (savedMsg) toast({ title: 'All done', description: savedMsg });
+      handleClose();
+    }
+  };
+
+  const handleSkip = () => advanceOrClose(queue, queueIdx);
+
+  // ── Drag & drop ────────────────────────────────────────────────────────────
+
+  const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
+  const onDragLeave = () => setIsDragging(false);
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFiles(e.dataTransfer.files);
+  };
+
+  // ── CSV ────────────────────────────────────────────────────────────────────
 
   const handleCsvFile = (file: File) => {
     const reader = new FileReader();
@@ -184,16 +277,13 @@ export const ImportModal = ({ open, onClose, onImported }: Props) => {
     for (const row of csvRows) {
       const record: Record<string, any> = { user_id: user?.id, payment_status: 'unpaid', processing_status: 'complete' };
       csvHeaders.forEach((h, i) => {
-        const field = csvMapping[h];
-        if (field && field !== 'skip' && row[i]) record[field] = row[i];
+        const f = csvMapping[h];
+        if (f && f !== 'skip' && row[i]) record[f] = row[i];
       });
       if (!record.vendor_name) continue;
-
-      // Coerce numeric fields
       if (record.total) record.total = Number(record.total) || null;
       if (record.subtotal) record.subtotal = Number(record.subtotal) || null;
       if (record.vat) record.vat = Number(record.vat) || null;
-
       const { error } = await supabase.from('invoices').insert(record);
       if (!error) inserted++;
     }
@@ -212,7 +302,8 @@ export const ImportModal = ({ open, onClose, onImported }: Props) => {
   // ── Reset & close ──────────────────────────────────────────────────────────
 
   const handleClose = () => {
-    setPdfFile(null); setExtracted(null); setEditFields({});
+    setQueue([]); setQueueIdx(0);
+    setExtracted(null); setEditFields({});
     setCsvHeaders([]); setCsvRows([]); setCsvMapping({}); setCsvInserted(null);
     onClose();
   };
@@ -229,6 +320,47 @@ export const ImportModal = ({ open, onClose, onImported }: Props) => {
       />
     </div>
   );
+
+  // ── Drop zone content ──────────────────────────────────────────────────────
+
+  const dropZoneContent = () => {
+    if (converting) return (
+      <>
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="text-sm font-medium">Converting images to PDF…</p>
+      </>
+    );
+
+    if (queue.length > 0) return (
+      <>
+        <FileText className="h-8 w-8 text-primary" />
+        <p className="text-sm font-medium">
+          {queue.length} file{queue.length > 1 ? 's' : ''} queued
+        </p>
+        <div className="mt-1 max-h-20 w-full overflow-y-auto space-y-0.5 text-xs text-muted-foreground">
+          {queue.map((f, i) => (
+            <div key={i} className={cn('flex items-center gap-1.5 px-1', i < queueIdx && 'opacity-40 line-through')}>
+              {i < queueIdx
+                ? <CheckCircle2 className="h-3 w-3 shrink-0 text-green-500" />
+                : i === queueIdx
+                  ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-primary" />
+                  : <div className="h-3 w-3 shrink-0 rounded-full border border-muted-foreground/40" />}
+              <span className="truncate">{f.name}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">Click to replace with new files</p>
+      </>
+    );
+
+    return (
+      <>
+        <Upload className="h-8 w-8 text-muted-foreground" />
+        <p className="text-sm font-medium">Drag & drop or click to choose</p>
+        <p className="text-xs text-muted-foreground">PDF, JPG, PNG, WebP · multiple files OK</p>
+      </>
+    );
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -249,37 +381,51 @@ export const ImportModal = ({ open, onClose, onImported }: Props) => {
             </TabsTrigger>
           </TabsList>
 
-          {/* ── PDF tab ─────────────────────────────────────── */}
+          {/* ── PDF tab ──────────────────────────────────────── */}
           <TabsContent value="pdf" className="space-y-4 pt-4">
             <p className="text-sm text-muted-foreground">
-              Upload a PDF or image invoice. We'll extract the details automatically — review before saving.
+              Upload PDFs or images — we'll extract the details automatically. Drop multiple files to process them in sequence.
             </p>
 
+            {/* Drop zone */}
             <label
               htmlFor="pdf-upload"
-              className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-8 transition-colors hover:bg-secondary/40"
+              className={cn(
+                'flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-8 transition-colors',
+                isDragging ? 'border-primary bg-primary/5' : 'hover:bg-secondary/40',
+              )}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
             >
-              <Upload className="h-8 w-8 text-muted-foreground" />
-              <p className="text-sm font-medium">
-                {pdfFile ? pdfFile.name : 'Click to choose file'}
-              </p>
-              <p className="text-xs text-muted-foreground">PDF, JPG, PNG, WebP</p>
+              {dropZoneContent()}
               <input
                 id="pdf-upload"
                 type="file"
-                accept={ACCEPTED_FILES}
+                accept={ACCEPTED_EXTS}
+                multiple
                 className="hidden"
-                onChange={(e) => { setPdfFile(e.target.files?.[0] ?? null); setExtracted(null); setEditFields({}); }}
+                onChange={(e) => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ''; }}
               />
             </label>
 
-            {!extracted && (
-              <Button onClick={handleExtract} disabled={!pdfFile || extracting} className="w-full">
-                {extracting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Extracting...</> : 'Extract Invoice Data'}
-              </Button>
+            {/* Progress indicator */}
+            {queue.length > 1 && (
+              <p className="text-center text-xs text-muted-foreground">
+                File {queueIdx + 1} of {queue.length}
+              </p>
             )}
 
-            {extracted && (
+            {/* Extracting state */}
+            {extracting && (
+              <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Extracting invoice data…
+              </div>
+            )}
+
+            {/* Review form */}
+            {!extracting && extracted && (
               <>
                 <div className="grid grid-cols-2 gap-3 rounded-lg border p-4">
                   {field('vendor_name', 'Vendor')}
@@ -295,17 +441,33 @@ export const ImportModal = ({ open, onClose, onImported }: Props) => {
 
                 <div className="flex gap-2">
                   <Button onClick={handleConfirmInsert} disabled={inserting} className="flex-1">
-                    {inserting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Save Invoice'}
+                    {inserting
+                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>
+                      : queue.length > 1
+                        ? `Save & Next (${queueIdx + 1}/${queue.length})`
+                        : 'Save Invoice'}
                   </Button>
-                  <Button variant="outline" onClick={() => { setPdfFile(null); setExtracted(null); setEditFields({}); }}>
-                    Start Over
+                  {queue.length > 1 && (
+                    <Button variant="outline" onClick={handleSkip} disabled={inserting}>
+                      Skip
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={() => { setQueue([]); setQueueIdx(0); setExtracted(null); setEditFields({}); }} disabled={inserting}>
+                    Clear
                   </Button>
                 </div>
               </>
             )}
+
+            {/* Empty state — no file yet */}
+            {!extracting && !extracted && queue.length === 0 && !converting && (
+              <p className="text-center text-xs text-muted-foreground py-2">
+                No file selected yet.
+              </p>
+            )}
           </TabsContent>
 
-          {/* ── CSV tab ─────────────────────────────────────── */}
+          {/* ── CSV tab ──────────────────────────────────────── */}
           <TabsContent value="csv" className="space-y-4 pt-4">
             <p className="text-sm text-muted-foreground">
               Upload a CSV exported from Excel, FreeAgent, Xero, QuickBooks, etc. Map the columns below.
@@ -370,7 +532,7 @@ export const ImportModal = ({ open, onClose, onImported }: Props) => {
                 ) : (
                   <Button onClick={handleCsvImport} disabled={csvInserting} className="w-full">
                     {csvInserting
-                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Importing...</>
+                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Importing…</>
                       : `Import ${csvRows.length} Invoice${csvRows.length !== 1 ? 's' : ''}`}
                   </Button>
                 )}

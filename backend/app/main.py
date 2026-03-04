@@ -12,7 +12,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import agentmail, chat, extract
+from app.routes import agentmail, chat, extract, projects
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +62,7 @@ API_PREFIX = "/api"
 
 app.include_router(chat.router,              prefix=API_PREFIX)
 app.include_router(extract.router,           prefix=API_PREFIX)
+app.include_router(projects.router,          prefix=API_PREFIX)
 # AgentMail webhook (no prefix — posts directly to /webhook/agentmail)
 app.include_router(agentmail.router)
 

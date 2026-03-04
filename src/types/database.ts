@@ -4,6 +4,7 @@ export interface Project {
   budget: number;
   status: 'Active' | 'Completed' | 'Archived';
   description: string | null;
+  ai_context: string | null;
   known_vendors: string[];
   known_locations: string[];
   created_at: string;

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, ChangeEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { Textarea } from '@/components/ui/textarea';
 import { Project, Category } from '@/types/database';
 import {
   Sheet,
@@ -16,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { Plus, FileText, X, Upload, Loader2, Trash2 } from 'lucide-react';
+import { Plus, FileText, X, Upload, Loader2, Trash2, Pencil } from 'lucide-react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
 
@@ -39,14 +40,18 @@ export const ProjectEditDialog = ({
   onOpenChange,
   onSaved,
 }: ProjectEditDialogProps) => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { baseCurrency } = useUserSettings();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [submitting, setSubmitting] = useState(false);
+  const [extractingContext, setExtractingContext] = useState(false);
+  const [editingAiContext, setEditingAiContext] = useState(false);
 
   // Details
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [aiContext, setAiContext] = useState('');
   const [status, setStatus] = useState<'Active' | 'Completed' | 'Archived'>(project.status as 'Active' | 'Completed' | 'Archived');
 
   // Categories & Budgets
@@ -68,6 +73,9 @@ export const ProjectEditDialog = ({
     if (!open) return;
 
     setName(project.name);
+    setDescription(project.description ?? '');
+    setAiContext(project.ai_context ?? '');
+    setEditingAiContext(false);
     setStatus(project.status as 'Active' | 'Completed' | 'Archived');
     setDocsToDelete(new Set());
     setPendingFiles([]);
@@ -168,10 +176,55 @@ export const ProjectEditDialog = ({
 
   // ── File helpers ──────────────────────────────────────────────────
 
+  const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
+
+  const extractContextFromFiles = async (files: File[]) => {
+    setExtractingContext(true);
+    const parts: string[] = [];
+    let failed = 0;
+    for (const file of files) {
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const resp = await fetch(`${BACKEND}/api/projects/extract-context`, {
+          method: 'POST',
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+          body: form,
+        });
+        console.log('[extract-context] status:', resp.status);
+        if (resp.ok) {
+          const json = await resp.json();
+          console.log('[extract-context] response:', json);
+          const extracted = json.description;
+          if (extracted) parts.push(`From ${file.name}:\n${extracted}`);
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          console.error('[extract-context] failed:', resp.status, err);
+          failed++;
+        }
+      } catch (e) {
+        console.error('Extract context network error:', e);
+        failed++;
+      }
+    }
+    if (parts.length > 0) {
+      setAiContext((prev) => {
+        const separator = prev.trim() ? '\n\n' : '';
+        return prev.trim() + separator + parts.join('\n\n');
+      });
+      toast({ title: 'Context extracted', description: 'Document context has been added below.' });
+    } else if (failed > 0) {
+      toast({ title: 'Extraction failed', description: 'Could not reach the backend. Check it is running and deployed.', variant: 'destructive' });
+    }
+    setExtractingContext(false);
+  };
+
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    setPendingFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+    const files = Array.from(e.target.files!);
+    setPendingFiles((prev) => [...prev, ...files]);
     e.target.value = '';
+    extractContextFromFiles(files);
   };
 
   const removePendingFile = (index: number) => {
@@ -196,7 +249,7 @@ export const ProjectEditDialog = ({
     try {
       const { error: projError } = await supabase
         .from('projects')
-        .update({ name: name.trim(), status, budget: totalBudget })
+        .update({ name: name.trim(), description: description.trim() || null, ai_context: aiContext.trim() || null, status, budget: totalBudget })
         .eq('id', project.id);
       if (projError) throw projError;
 
@@ -307,6 +360,67 @@ export const ProjectEditDialog = ({
                       <SelectItem value="Archived">Archived</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-description">Project Description</Label>
+                  <Textarea
+                    id="edit-description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Add any context about this project — what it's for, key contacts, anything useful."
+                    className="min-h-[80px] resize-none text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Extracted from project documents</Label>
+                    <div className="flex items-center gap-2">
+                      {extractingContext && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" /> Extracting…
+                        </span>
+                      )}
+                      {!editingAiContext && !extractingContext && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingAiContext(true)}
+                          className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
+                          title="Edit"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {editingAiContext && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingAiContext(false)}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Done
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {editingAiContext ? (
+                    <Textarea
+                      autoFocus
+                      value={aiContext}
+                      onChange={(e) => setAiContext(e.target.value)}
+                      className="min-h-[100px] resize-none text-sm"
+                    />
+                  ) : (
+                    <div
+                      className="rounded-md border bg-secondary/20 px-3 py-2.5 text-sm text-muted-foreground whitespace-pre-line min-h-[80px] cursor-pointer"
+                      onClick={() => setEditingAiContext(true)}
+                    >
+                      {aiContext || (
+                        <span className="italic opacity-50">
+                          Upload a document below and we'll extract key project context here automatically.
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">Both fields are seen by the AI when assigning invoices and answering questions.</p>
                 </div>
               </CardContent>
             </Card>

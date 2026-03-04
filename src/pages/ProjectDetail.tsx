@@ -31,7 +31,7 @@ const ProjectDetail = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [docs, setDocs] = useState<{ id: string; file_name: string; storage_path: string }[]>([]);
+  const [docs, setDocs] = useState<{ id: string; file_name: string; storage_path: string; signedUrl?: string }[]>([]);
   const [viewingDoc, setViewingDoc] = useState<{ url: string; name: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -54,17 +54,24 @@ const ProjectDetail = () => {
       });
       setInvoices(enriched);
       setCategories(c.data ?? []);
-      setDocs(d.data ?? []);
+      const rawDocs = d.data ?? [];
+      setDocs(rawDocs);
       setLoading(false);
+      // Pre-generate signed URLs in the background so clicks are instant
+      if (rawDocs.length > 0) {
+        Promise.all(
+          rawDocs.map((doc: { id: string; file_name: string; storage_path: string }) =>
+            supabase.storage.from('project-documents-bucket').createSignedUrl(doc.storage_path, 3600)
+              .then(({ data }) => ({ ...doc, signedUrl: data?.signedUrl }))
+          )
+        ).then(setDocs);
+      }
     });
   };
 
-  const viewDocument = async (storagePath: string, fileName: string) => {
-    const { data, error } = await supabase.storage
-      .from('project-documents-bucket')
-      .createSignedUrl(storagePath, 3600);
-    if (error || !data) return toast({ title: 'Could not open file', description: error?.message, variant: 'destructive' });
-    setViewingDoc({ url: data.signedUrl, name: fileName });
+  const viewDocument = (doc: { file_name: string; signedUrl?: string }) => {
+    if (!doc.signedUrl) return toast({ title: 'Document not ready', description: 'Still generating link, try again in a moment.', variant: 'destructive' });
+    setViewingDoc({ url: doc.signedUrl, name: doc.file_name });
   };
 
   useEffect(() => { fetchData(); }, [id]);
@@ -138,6 +145,12 @@ const ProjectDetail = () => {
             </Button>
           </div>
         </div>
+
+        {project.description && (
+          <div className="-mt-4 max-w-2xl">
+            <p className="text-sm text-muted-foreground">{project.description}</p>
+          </div>
+        )}
 
         <ProjectEditDialog
           project={project}
@@ -252,7 +265,7 @@ const ProjectDetail = () => {
                 return (
                   <button
                     key={doc.id}
-                    onClick={() => viewDocument(doc.storage_path, doc.file_name)}
+                    onClick={() => viewDocument(doc)}
                     className="flex items-center gap-3 rounded-lg border bg-card p-3 text-left transition-shadow hover:shadow-md"
                   >
                     {isImage

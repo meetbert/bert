@@ -37,6 +37,8 @@ const ProjectDetail = () => {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
+  const [assignableCategories, setAssignableCategories] = useState<Category[]>([]);
+
   const fetchData = () => {
     if (!id) return;
     Promise.all([
@@ -44,7 +46,8 @@ const ProjectDetail = () => {
       supabase.from('invoices').select('*, category:invoice_categories(*)').eq('project_id', id),
       supabase.from('invoice_categories').select('*'),
       supabase.from('project_documents').select('id, file_name, storage_path').eq('project_id', id),
-    ]).then(([p, i, c, d]) => {
+      supabase.from('project_categories').select('category_id').eq('project_id', id),
+    ]).then(([p, i, c, d, pc]) => {
       setProject(p.data);
       const today = new Date().toISOString().split('T')[0];
       const enriched = (i.data ?? []).map((inv: any) => {
@@ -53,7 +56,12 @@ const ProjectDetail = () => {
         return { ...inv, payment_status: status };
       });
       setInvoices(enriched);
-      setCategories(c.data ?? []);
+      const allCats: Category[] = c.data ?? [];
+      setCategories(allCats);
+      const projectCatIds = new Set((pc.data ?? []).map((row: any) => row.category_id));
+      setAssignableCategories(
+        projectCatIds.size > 0 ? allCats.filter((cat) => projectCatIds.has(cat.id)) : allCats,
+      );
       const rawDocs = d.data ?? [];
       setDocs(rawDocs);
       setLoading(false);
@@ -231,7 +239,7 @@ const ProjectDetail = () => {
                         <SelectTrigger className="h-7 w-36 text-xs border-dashed justify-between text-left">
                           <SelectValue placeholder="Assign" />
                         </SelectTrigger>
-                        <SelectContent position="popper" sideOffset={4}>{categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                        <SelectContent position="popper" sideOffset={4}>{assignableCategories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </td>
                     <td className="p-3" onClick={(e) => e.stopPropagation()}>

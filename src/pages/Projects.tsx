@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, FolderOpen } from 'lucide-react';
+import { Plus, FolderOpen, AlertTriangle } from 'lucide-react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency, convertToBase } from '@/lib/currency';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
@@ -45,14 +45,23 @@ const Projects = () => {
   const renderProjectCard = (p: Project) => {
     const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
     const hasBudget = p.budget != null && p.budget > 0;
-    const pct = hasBudget ? Math.min((spent / p.budget!) * 100, 100) : 0;
+    const rawPct = hasBudget ? (spent / p.budget!) * 100 : 0;
+    const isOverBudget = rawPct > 100;
+    const pct = Math.min(rawPct, 100);
 
     return (
       <Link key={p.id} to={`/projects/${p.id}`}>
-        <Card className="cursor-pointer transition-shadow hover:shadow-md">
+        <Card className={`cursor-pointer transition-shadow hover:shadow-md ${isOverBudget ? 'border-destructive/40' : ''}`}>
           <CardContent className="p-5">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="font-semibold">{p.name}</h3>
+              <div className="flex items-center gap-2 min-w-0">
+                <h3 className="font-semibold truncate">{p.name}</h3>
+                {isOverBudget && (
+                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
+                    <AlertTriangle className="h-3 w-3" /> Over
+                  </span>
+                )}
+              </div>
               <StatusBadge status={p.status} />
             </div>
             {hasBudget ? (

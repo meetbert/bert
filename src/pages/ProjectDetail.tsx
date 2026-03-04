@@ -17,7 +17,7 @@ import { toast } from '@/hooks/use-toast';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency, convertToBase } from '@/lib/currency';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
-import { FileText, DollarSign, Target, AlertCircle, ArrowLeft, Pencil, Trash2 } from 'lucide-react';
+import { FileText, DollarSign, Target, AlertCircle, ArrowLeft, Pencil, Trash2, ExternalLink, ImageIcon } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { ProjectEditDialog } from '@/components/ProjectEditDialog';
 
@@ -31,6 +31,8 @@ const ProjectDetail = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [docs, setDocs] = useState<{ id: string; file_name: string; storage_path: string }[]>([]);
+  const [viewingDoc, setViewingDoc] = useState<{ url: string; name: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -41,7 +43,8 @@ const ProjectDetail = () => {
       supabase.from('projects').select('*').eq('id', id).single(),
       supabase.from('invoices').select('*, category:invoice_categories(*)').eq('project_id', id),
       supabase.from('invoice_categories').select('*'),
-    ]).then(([p, i, c]) => {
+      supabase.from('project_documents').select('id, file_name, storage_path').eq('project_id', id),
+    ]).then(([p, i, c, d]) => {
       setProject(p.data);
       const today = new Date().toISOString().split('T')[0];
       const enriched = (i.data ?? []).map((inv: any) => {
@@ -51,8 +54,17 @@ const ProjectDetail = () => {
       });
       setInvoices(enriched);
       setCategories(c.data ?? []);
+      setDocs(d.data ?? []);
       setLoading(false);
     });
+  };
+
+  const viewDocument = async (storagePath: string, fileName: string) => {
+    const { data, error } = await supabase.storage
+      .from('project-documents-bucket')
+      .createSignedUrl(storagePath, 3600);
+    if (error || !data) return toast({ title: 'Could not open file', description: error?.message, variant: 'destructive' });
+    setViewingDoc({ url: data.signedUrl, name: fileName });
   };
 
   useEffect(() => { fetchData(); }, [id]);
@@ -230,6 +242,46 @@ const ProjectDetail = () => {
             </tbody>
           </table>
         </div>
+        {/* Documents */}
+        {docs.length > 0 && (
+          <div>
+            <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-muted-foreground">Documents</h2>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {docs.map((doc) => {
+                const isImage = /\.(png|jpe?g|webp|gif)$/i.test(doc.file_name);
+                return (
+                  <button
+                    key={doc.id}
+                    onClick={() => viewDocument(doc.storage_path, doc.file_name)}
+                    className="flex items-center gap-3 rounded-lg border bg-card p-3 text-left transition-shadow hover:shadow-md"
+                  >
+                    {isImage
+                      ? <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      : <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                    <span className="flex-1 truncate text-sm">{doc.file_name}</span>
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Document viewer dialog */}
+        <Dialog open={!!viewingDoc} onOpenChange={(open) => { if (!open) setViewingDoc(null); }}>
+          <DialogContent className="max-w-4xl w-full max-h-[90vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="truncate text-sm font-medium">{viewingDoc?.name}</DialogTitle>
+            </DialogHeader>
+            {viewingDoc && (() => {
+              const isImage = /\.(png|jpe?g|webp|gif)$/i.test(viewingDoc.name);
+              return isImage
+                ? <img src={viewingDoc.url} alt={viewingDoc.name} className="rounded-md object-contain max-h-[75vh] w-auto mx-auto" />
+                : <iframe src={viewingDoc.url} className="flex-1 min-h-[75vh] w-full rounded-md border-0" title={viewingDoc.name} />;
+            })()}
+          </DialogContent>
+        </Dialog>
+
         {/* Delete confirm dialog */}
         <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
           <DialogContent>

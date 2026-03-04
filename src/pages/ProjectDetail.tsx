@@ -159,18 +159,20 @@ const ProjectDetail = () => {
           onSaved={fetchData}
         />
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className={`grid gap-4 sm:grid-cols-2 ${project.budget > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-2'}`}>
           <KpiCard title="Invoices" value={invoices.length} icon={<FileText className="h-5 w-5 text-primary" />} />
           <KpiCard title="Total Spent" value={formatCurrency(totalSpent, baseCurrency)} icon={<DollarSign className="h-5 w-5 text-primary" />} />
-          <KpiCard title="Budget" value={formatCurrency(project.budget, baseCurrency)} icon={<Target className="h-5 w-5 text-muted-foreground" />} />
-          <KpiCard title="Remaining" value={formatCurrency(remaining, baseCurrency)} icon={<AlertCircle className={`h-5 w-5 ${remaining < 0 ? 'text-primary' : 'text-muted-foreground'}`} />} />
+          {project.budget > 0 && <>
+            <KpiCard title="Budget" value={formatCurrency(project.budget, baseCurrency)} icon={<Target className="h-5 w-5 text-muted-foreground" />} />
+            <KpiCard title="Remaining" value={formatCurrency(remaining, baseCurrency)} icon={<AlertCircle className={`h-5 w-5 ${remaining < 0 ? 'text-primary' : 'text-muted-foreground'}`} />} />
+          </>}
         </div>
 
-        {remaining < 0 && (
+        {project.budget > 0 && remaining < 0 && (
           <div className="rounded-lg border border-primary bg-primary/5 p-4 text-sm font-medium text-primary">Over budget by {formatCurrency(Math.abs(remaining), baseCurrency)}</div>
         )}
 
-        <Progress value={pct} className="h-3" />
+        {project.budget > 0 && <Progress value={pct} className="h-3" />}
 
         <div className="grid gap-6 lg:grid-cols-3">
           {catSpend.length > 0 && (

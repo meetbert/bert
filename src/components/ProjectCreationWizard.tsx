@@ -40,6 +40,8 @@ export const ProjectCreationWizard = ({
   const [aiContext, setAiContext] = useState('');
 
   // Step 2 — Categories & Budgets
+  const [budgetMode, setBudgetMode] = useState<'total' | 'category'>('total');
+  const [manualBudget, setManualBudget] = useState('');
   const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<Map<string, number>>(new Map());
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -199,7 +201,7 @@ export const ProjectCreationWizard = ({
           description: description.trim() || null,
           ai_context: aiContext.trim() || null,
           status: 'Active',
-          budget: totalBudget,
+          budget: budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget,
           user_id: user.id,
         })
         .select('id')
@@ -311,9 +313,44 @@ export const ProjectCreationWizard = ({
           <div>
             <h3 className="font-semibold">Categories & Budgets</h3>
             <p className="text-sm text-muted-foreground">
-              Select expense categories for this project and allocate budgets.
+              Select expense categories and set a budget — either as one total or split by category.
             </p>
           </div>
+
+          {/* Budget mode toggle */}
+          <div className="flex rounded-md border overflow-hidden text-sm">
+            <button
+              type="button"
+              onClick={() => setBudgetMode('total')}
+              className={`flex-1 py-1.5 text-center transition-colors ${budgetMode === 'total' ? 'bg-secondary font-medium' : 'text-muted-foreground hover:bg-secondary/50'}`}
+            >
+              Total budget
+            </button>
+            <button
+              type="button"
+              onClick={() => setBudgetMode('category')}
+              className={`flex-1 py-1.5 text-center transition-colors border-l ${budgetMode === 'category' ? 'bg-secondary font-medium' : 'text-muted-foreground hover:bg-secondary/50'}`}
+            >
+              By category
+            </button>
+          </div>
+
+          {/* Total budget input (total mode only) */}
+          {budgetMode === 'total' && (
+            <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+              <span className="flex-1 text-sm text-muted-foreground">Total budget</span>
+              <span className="text-xs text-muted-foreground">{baseCurrency}</span>
+              <Input
+                type="number"
+                min="0"
+                step="100"
+                placeholder="0"
+                className="w-32 h-8 text-sm text-right"
+                value={manualBudget}
+                onChange={(e) => setManualBudget(e.target.value)}
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             {availableCategories.map((cat) => {
@@ -336,26 +373,28 @@ export const ProjectCreationWizard = ({
                   >
                     {cat.name}
                   </label>
-                  <div className={`flex items-center gap-2 ${isSelected ? 'visible' : 'invisible'}`}>
-                    <span className="text-xs text-muted-foreground">
-                      {baseCurrency}
-                    </span>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="100"
-                      placeholder="0"
-                      tabIndex={isSelected ? 0 : -1}
-                      className="w-28 h-8 text-sm text-right"
-                      value={isSelected ? (selectedCategories.get(cat.id) || '') : ''}
-                      onChange={(e) =>
-                        setCategoryBudget(
-                          cat.id,
-                          parseFloat(e.target.value) || 0,
-                        )
-                      }
-                    />
-                  </div>
+                  {budgetMode === 'category' && (
+                    <div className={`flex items-center gap-2 ${isSelected ? 'visible' : 'invisible'}`}>
+                      <span className="text-xs text-muted-foreground">
+                        {baseCurrency}
+                      </span>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="100"
+                        placeholder="0"
+                        tabIndex={isSelected ? 0 : -1}
+                        className="w-28 h-8 text-sm text-right"
+                        value={isSelected ? (selectedCategories.get(cat.id) || '') : ''}
+                        onChange={(e) =>
+                          setCategoryBudget(
+                            cat.id,
+                            parseFloat(e.target.value) || 0,
+                          )
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -383,7 +422,10 @@ export const ProjectCreationWizard = ({
           {/* Running total */}
           <div className="flex justify-between border-t pt-3 text-sm font-medium">
             <span>Total Budget</span>
-            <span>{formatCurrency(totalBudget, baseCurrency)}</span>
+            <span>{formatCurrency(
+              budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget,
+              baseCurrency,
+            )}</span>
           </div>
 
           <div className="flex justify-between pt-2">

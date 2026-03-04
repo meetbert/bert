@@ -47,6 +47,8 @@ export const ProjectEditDialog = ({
   const [submitting, setSubmitting] = useState(false);
   const [extractingContext, setExtractingContext] = useState(false);
   const [editingAiContext, setEditingAiContext] = useState(false);
+  const [budgetMode, setBudgetMode] = useState<'total' | 'category'>('total');
+  const [manualBudget, setManualBudget] = useState('');
 
   // Details
   const [name, setName] = useState('');
@@ -100,6 +102,10 @@ export const ProjectEditDialog = ({
         selected.set(pc.category_id, pc.budget ?? 0);
       });
       setSelectedCategories(selected);
+
+      const hasCategoryBudgets = (projCats.data ?? []).some((pc: any) => (pc.budget ?? 0) > 0);
+      setBudgetMode(hasCategoryBudgets ? 'category' : 'total');
+      setManualBudget(hasCategoryBudgets ? '' : (project.budget > 0 ? String(project.budget) : ''));
     });
   }, [open, project.id]);
 
@@ -247,9 +253,10 @@ export const ProjectEditDialog = ({
     setSubmitting(true);
 
     try {
+      const budgetToSave = budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget;
       const { error: projError } = await supabase
         .from('projects')
-        .update({ name: name.trim(), description: description.trim() || null, ai_context: aiContext.trim() || null, status, budget: totalBudget })
+        .update({ name: name.trim(), description: description.trim() || null, ai_context: aiContext.trim() || null, status, budget: budgetToSave })
         .eq('id', project.id);
       if (projError) throw projError;
 
@@ -437,8 +444,43 @@ export const ProjectEditDialog = ({
               </span>
             </div>
 
+            {/* Budget mode toggle */}
+            <div className="flex rounded-md border overflow-hidden text-sm mb-3">
+              <button
+                type="button"
+                onClick={() => setBudgetMode('total')}
+                className={`flex-1 py-1.5 text-center transition-colors ${budgetMode === 'total' ? 'bg-secondary font-medium' : 'text-muted-foreground hover:bg-secondary/50'}`}
+              >
+                Total budget
+              </button>
+              <button
+                type="button"
+                onClick={() => setBudgetMode('category')}
+                className={`flex-1 py-1.5 text-center transition-colors border-l ${budgetMode === 'category' ? 'bg-secondary font-medium' : 'text-muted-foreground hover:bg-secondary/50'}`}
+              >
+                By category
+              </button>
+            </div>
+
             <Card>
               <CardContent className="p-0">
+                {/* Total budget input (total mode only) */}
+                {budgetMode === 'total' && (
+                  <div className="flex items-center gap-3 px-5 py-3 border-b">
+                    <span className="text-sm text-muted-foreground flex-1">Total budget</span>
+                    <span className="text-xs text-muted-foreground">{baseCurrency}</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="100"
+                      placeholder="0"
+                      className="w-32 h-8 text-sm text-right"
+                      value={manualBudget}
+                      onChange={(e) => setManualBudget(e.target.value)}
+                    />
+                  </div>
+                )}
+
                 {/* Category list */}
                 <div className="divide-y">
                   {availableCategories.map((cat) => {
@@ -461,26 +503,28 @@ export const ProjectEditDialog = ({
                         >
                           {cat.name}
                         </label>
-                        <div className={`flex items-center gap-2 ${isSelected ? 'visible' : 'invisible'}`}>
-                          <span className="text-xs text-muted-foreground">
-                            {baseCurrency}
-                          </span>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="100"
-                            placeholder="0"
-                            tabIndex={isSelected ? 0 : -1}
-                            className="w-32 h-8 text-sm text-right"
-                            value={isSelected ? (selectedCategories.get(cat.id) || '') : ''}
-                            onChange={(e) =>
-                              setCategoryBudget(
-                                cat.id,
-                                parseFloat(e.target.value) || 0,
-                              )
-                            }
-                          />
-                        </div>
+                        {budgetMode === 'category' && (
+                          <div className={`flex items-center gap-2 ${isSelected ? 'visible' : 'invisible'}`}>
+                            <span className="text-xs text-muted-foreground">
+                              {baseCurrency}
+                            </span>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="100"
+                              placeholder="0"
+                              tabIndex={isSelected ? 0 : -1}
+                              className="w-32 h-8 text-sm text-right"
+                              value={isSelected ? (selectedCategories.get(cat.id) || '') : ''}
+                              onChange={(e) =>
+                                setCategoryBudget(
+                                  cat.id,
+                                  parseFloat(e.target.value) || 0,
+                                )
+                              }
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -512,7 +556,10 @@ export const ProjectEditDialog = ({
                 <div className="flex items-center justify-between border-t bg-secondary/20 px-5 py-3">
                   <span className="text-sm font-medium">Total Budget</span>
                   <span className="text-sm font-semibold">
-                    {formatCurrency(totalBudget, baseCurrency)}
+                    {formatCurrency(
+                      budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget,
+                      baseCurrency,
+                    )}
                   </span>
                 </div>
               </CardContent>

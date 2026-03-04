@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserSettings } from '@/types/database';
@@ -14,7 +13,6 @@ import { SUPPORTED_CURRENCIES, currencySymbol } from '@/lib/currency';
 
 const Settings = () => {
   const { user, signOut } = useAuth();
-  const navigate = useNavigate();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -111,14 +109,6 @@ const Settings = () => {
                 ))}
               </SelectContent>
             </Select>
-          </CardContent>
-        </Card>
-
-        {/* ── Onboarding ──────────────────────────────────────────────── */}
-        <Card>
-          <CardHeader><CardTitle className="text-sm">Onboarding</CardTitle></CardHeader>
-          <CardContent>
-            <Button variant="outline" size="sm" onClick={() => navigate('/onboarding')}>Re-run Onboarding</Button>
           </CardContent>
         </Card>
 

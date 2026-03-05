@@ -143,11 +143,61 @@ const Settings = () => {
         {/* ── Account ─────────────────────────────────────────────────── */}
         <Card>
           <CardHeader><CardTitle className="text-sm">Account</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">{user?.email}</p>
-            <Button variant="outline" size="sm" onClick={signOut}><LogOut className="mr-1 h-4 w-4" /> Logout</Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={signOut}><LogOut className="mr-1 h-4 w-4" /> Logout</Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="mr-1 h-4 w-4" /> Delete Account
+              </Button>
+            </div>
           </CardContent>
         </Card>
+
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete your account and all associated data including invoices, projects, and settings. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={deleting}
+                onClick={async (e) => {
+                  e.preventDefault();
+                  setDeleting(true);
+                  try {
+                    const { data: { session: s } } = await supabase.auth.getSession();
+                    const res = await supabase.functions.invoke('delete-account', {
+                      headers: { Authorization: `Bearer ${s?.access_token}` },
+                    });
+                    if (res.error || res.data?.error) {
+                      throw new Error(res.data?.error || res.error?.message || 'Failed');
+                    }
+                    await supabase.auth.signOut();
+                    navigate('/');
+                    toast({ title: 'Account deleted' });
+                  } catch (err: any) {
+                    toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                  } finally {
+                    setDeleting(false);
+                    setDeleteOpen(false);
+                  }
+                }}
+              >
+                {deleting ? 'Deleting…' : 'Yes, delete my account'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
       </div>
     </div>

@@ -9,11 +9,13 @@ import { Check } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { ProjectCreationWizard } from '@/components/ProjectCreationWizard';
 import { useWalkthrough } from '@/contexts/WalkthroughContext';
+import { useDemoData } from '@/contexts/DemoDataContext';
 
 const Onboarding = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { start: startWalkthrough } = useWalkthrough();
+  const { startDemo } = useDemoData();
   const [step, setStep] = useState(1);
   const totalSteps = 3;
 
@@ -21,6 +23,7 @@ const Onboarding = () => {
     if (!user) return;
     await supabase.from('user_settings').upsert({ id: user.id, onboarding_done: true });
     localStorage.removeItem('bert_walkthrough_done');
+    startDemo();
     startWalkthrough();
     navigate('/dashboard', { replace: true });
   };
@@ -31,7 +34,6 @@ const Onboarding = () => {
       <div className="container max-w-lg py-12">
         <Progress value={(step / totalSteps) * 100} className="mb-8" />
 
-        {/* ── Step 1: Welcome ─────────────────────────────────────────── */}
         {step === 1 && (
           <Card>
             <CardHeader className="text-center">
@@ -44,25 +46,16 @@ const Onboarding = () => {
           </Card>
         )}
 
-        {/* ── Step 2: First Project ────────────────────────────────────── */}
         {step === 2 && (
           <Card>
             <CardHeader>
               <CardTitle>Create Your First Project</CardTitle>
-              <CardDescription>
-                Set up your project with categories and documents.
-              </CardDescription>
+              <CardDescription>Set up your project with categories and documents.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <ProjectCreationWizard
-                onComplete={() => setStep(3)}
-                showProgress={false}
-              />
+              <ProjectCreationWizard onComplete={() => setStep(3)} showProgress={false} />
               <div className="pt-2">
-                <button
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                  onClick={() => setStep(3)}
-                >
+                <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setStep(3)}>
                   Skip for now
                 </button>
               </div>
@@ -70,7 +63,6 @@ const Onboarding = () => {
           </Card>
         )}
 
-        {/* ── Step 3: Done ─────────────────────────────────────────────── */}
         {step === 3 && (
           <Card>
             <CardHeader className="text-center">

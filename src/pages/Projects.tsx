@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Project } from '@/types/database';
@@ -15,12 +15,14 @@ import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency, convertToBase } from '@/lib/currency';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { ProjectCreationWizard } from '@/components/ProjectCreationWizard';
+import { useDemoData } from '@/contexts/DemoDataContext';
 
 const Projects = () => {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [invoices, setInvoices] = useState<{ id: string; total: number; currency: string | null; project_id: string | null }[]>([]);
+  const [rawProjects, setRawProjects] = useState<Project[]>([]);
+  const [rawInvoices, setRawInvoices] = useState<{ id: string; total: number; currency: string | null; project_id: string | null }[]>([]);
   const { baseCurrency } = useUserSettings();
   const { rates } = useExchangeRates(baseCurrency);
+  const { isDemoMode, demoProjects, demoInvoices } = useDemoData();
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [filterTab, setFilterTab] = useState<'all' | 'Active' | 'Completed' | 'Archived'>('all');
@@ -30,12 +32,15 @@ const Projects = () => {
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('invoices').select('id, total, currency, project_id'),
     ]);
-    setProjects(p.data ?? []);
-    setInvoices(i.data ?? []);
+    setRawProjects(p.data ?? []);
+    setRawInvoices(i.data ?? []);
     setLoading(false);
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const projects = useMemo(() => isDemoMode ? [...demoProjects, ...rawProjects] : rawProjects, [isDemoMode, demoProjects, rawProjects]);
+  const invoices = useMemo(() => isDemoMode ? [...demoInvoices.map(d => ({ id: d.id, total: d.total ?? 0, currency: d.currency, project_id: d.project_id })), ...rawInvoices] : rawInvoices, [isDemoMode, demoInvoices, rawInvoices]);
 
 
   const filteredProjects = filterTab === 'all' ? projects : projects.filter((p) => p.status === filterTab);
@@ -123,6 +128,7 @@ const Projects = () => {
             ))}
           </div>
           <button
+            data-tour="add-project-btn"
             onClick={() => setShowCreateDialog(true)}
             className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
           >

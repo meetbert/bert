@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
@@ -14,15 +14,17 @@ import { CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineCha
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { formatCurrency, convertToBase } from '@/lib/currency';
+import { useDemoData } from '@/contexts/DemoDataContext';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { baseCurrency } = useUserSettings();
   const { rates } = useExchangeRates(baseCurrency);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [projectCategories, setProjectCategories] = useState<{ project_id: string; category_id: string; budget: number }[]>([]);
+  const { isDemoMode, demoInvoices, demoProjects, demoCategories, demoProjectCategories } = useDemoData();
+  const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);
+  const [rawProjects, setRawProjects] = useState<Project[]>([]);
+  const [rawCategories, setRawCategories] = useState<Category[]>([]);
+  const [rawProjectCategories, setRawProjectCategories] = useState<{ project_id: string; category_id: string; budget: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('6m');
   const [kpiFilter, setKpiFilter] = useState<string | null>(null);
@@ -42,12 +44,18 @@ const Dashboard = () => {
       if (status === 'unpaid' && inv.due_date && inv.due_date < today) status = 'overdue';
       return { ...inv, payment_status: status };
     });
-    setInvoices(enriched);
-    setProjects(projRes.data ?? []);
-    setCategories(catRes.data ?? []);
-    setProjectCategories(pcRes.data ?? []);
+    setRawInvoices(enriched);
+    setRawProjects(projRes.data ?? []);
+    setRawCategories(catRes.data ?? []);
+    setRawProjectCategories(pcRes.data ?? []);
     setLoading(false);
   };
+
+  // Merge demo data when tour is active
+  const invoices = useMemo(() => isDemoMode ? [...demoInvoices, ...rawInvoices] : rawInvoices, [isDemoMode, demoInvoices, rawInvoices]);
+  const projects = useMemo(() => isDemoMode ? [...demoProjects, ...rawProjects] : rawProjects, [isDemoMode, demoProjects, rawProjects]);
+  const categories = useMemo(() => isDemoMode ? [...demoCategories, ...rawCategories] : rawCategories, [isDemoMode, demoCategories, rawCategories]);
+  const projectCategories = useMemo(() => isDemoMode ? [...demoProjectCategories, ...rawProjectCategories] : rawProjectCategories, [isDemoMode, demoProjectCategories, rawProjectCategories]);
 
   const activeProjects = projects.filter((p) => p.status === 'Active');
   const unpaid = invoices.filter((i) => i.payment_status === 'unpaid');

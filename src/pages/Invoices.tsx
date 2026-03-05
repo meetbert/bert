@@ -17,15 +17,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { formatCurrency, convertToBase } from '@/lib/currency';
+import { useDemoData } from '@/contexts/DemoDataContext';
 
 const PAGE_SIZE = 25;
 
 const Invoices = () => {
   const navigate = useNavigate();
   const [showImport, setShowImport] = useState(false);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);
+  const [rawProjects, setRawProjects] = useState<Project[]>([]);
+  const [rawCategories, setRawCategories] = useState<Category[]>([]);
+  const { isDemoMode, demoInvoices, demoProjects, demoCategories } = useDemoData();
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterProject, setFilterProject] = useState('all');
@@ -49,7 +51,6 @@ const Invoices = () => {
 
     const today = new Date().toISOString().split('T')[0];
     const enriched = (i.data ?? []).map((inv: any) => {
-      // Derive overdue: unpaid + due_date in the past
       let status = inv.payment_status;
       if (status === 'unpaid' && inv.due_date && inv.due_date < today) {
         status = 'overdue';
@@ -62,13 +63,17 @@ const Invoices = () => {
       };
     });
 
-    setInvoices(enriched);
-    setProjects(p.data ?? []);
-    setCategories(c.data ?? []);
+    setRawInvoices(enriched);
+    setRawProjects(p.data ?? []);
+    setRawCategories(c.data ?? []);
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const invoices = useMemo(() => isDemoMode ? [...demoInvoices, ...rawInvoices] : rawInvoices, [isDemoMode, demoInvoices, rawInvoices]);
+  const projects = useMemo(() => isDemoMode ? [...demoProjects, ...rawProjects] : rawProjects, [isDemoMode, demoProjects, rawProjects]);
+  const categories = useMemo(() => isDemoMode ? [...demoCategories, ...rawCategories] : rawCategories, [isDemoMode, demoCategories, rawCategories]);
 
   
   const archivedProjects = useMemo(() => projects.filter(p => p.status === 'Completed'), [projects]);
@@ -111,7 +116,7 @@ const Invoices = () => {
   const changeStatus = async (inv: Invoice, newStatus: string) => {
     const { error } = await supabase.from('invoices').update({ payment_status: newStatus }).eq('id', inv.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
+    setRawInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
     toast({ title: `Marked as ${newStatus}` });
   };
 
@@ -119,7 +124,7 @@ const Invoices = () => {
     const { error } = await supabase.from('invoices').update({ project_id: projectId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     const proj = projects.find(p => p.id === projectId);
-    setInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, project_id: projectId, project: proj ?? null } as any : i));
+    setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, project_id: projectId, project: proj ?? null } as any : i));
     toast({ title: 'Project assigned' });
   };
 
@@ -127,7 +132,7 @@ const Invoices = () => {
     const { error } = await supabase.from('invoices').update({ category_id: categoryId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     const cat = categories.find(c => c.id === categoryId);
-    setInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
+    setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
     toast({ title: 'Category assigned' });
   };
 

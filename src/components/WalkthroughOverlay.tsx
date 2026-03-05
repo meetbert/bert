@@ -132,7 +132,7 @@ export const WalkthroughOverlay = () => {
   return (
     <>
       {/* Backdrop — SVG-based cutout for true transparency */}
-      <svg className="fixed inset-0 z-[998] w-full h-full pointer-events-auto" onClick={handleSkip}>
+      <svg className="fixed inset-0 z-[998] w-full h-full pointer-events-auto">
         <defs>
           <mask id="tour-mask">
             <rect width="100%" height="100%" fill="white" />

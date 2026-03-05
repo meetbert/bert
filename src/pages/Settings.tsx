@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserSettings } from '@/types/database';
@@ -8,11 +9,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { Copy, LogOut, Mail } from 'lucide-react';
+import { Copy, LogOut, Mail, Sparkles } from 'lucide-react';
 import { SUPPORTED_CURRENCIES, currencySymbol } from '@/lib/currency';
+import { useWalkthrough } from '@/contexts/WalkthroughContext';
+import { useDemoData } from '@/contexts/DemoDataContext';
 
 const Settings = () => {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const { start: startWalkthrough } = useWalkthrough();
+  const { startDemo } = useDemoData();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -109,6 +115,25 @@ const Settings = () => {
                 ))}
               </SelectContent>
             </Select>
+          </CardContent>
+        </Card>
+
+        {/* ── Tour ──────────────────────────────────────────────────── */}
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Product Tour</CardTitle></CardHeader>
+          <CardContent>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                localStorage.removeItem('bert_walkthrough_done');
+                startDemo();
+                startWalkthrough();
+                navigate('/dashboard');
+              }}
+            >
+              <Sparkles className="mr-1 h-4 w-4" /> Show me around
+            </Button>
           </CardContent>
         </Card>
 

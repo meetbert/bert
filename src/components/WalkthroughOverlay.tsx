@@ -33,7 +33,7 @@ export const WalkthroughOverlay = () => {
       if (el) {
         const r = el.getBoundingClientRect();
         setRect(r);
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       } else {
         setRect(null);
       }

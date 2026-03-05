@@ -52,13 +52,37 @@ const Onboarding = () => {
         {step === 2 && (
           <Card>
             <CardHeader>
+              <CardTitle>Choose Your Base Currency</CardTitle>
+              <CardDescription>All dashboard totals, KPIs, and budgets will display in this currency.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Select value={baseCurrency} onValueChange={setBaseCurrency}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_CURRENCIES.map((c) => (
+                    <SelectItem key={c} value={c}>{currencySymbol(c).trim()} {c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button className="w-full" onClick={async () => {
+                if (!user) return;
+                await supabase.from('user_settings').upsert({ id: user.id, base_currency: baseCurrency });
+                setStep(3);
+              }}>Continue →</Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 3 && (
+          <Card>
+            <CardHeader>
               <CardTitle>Create Your First Project</CardTitle>
               <CardDescription>Set up your project with categories and documents.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <ProjectCreationWizard onComplete={() => setStep(3)} showProgress={false} />
+              <ProjectCreationWizard onComplete={() => setStep(4)} showProgress={false} />
               <div className="pt-2">
-                <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setStep(3)}>
+                <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setStep(4)}>
                   Skip for now
                 </button>
               </div>
@@ -66,7 +90,7 @@ const Onboarding = () => {
           </Card>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <Card>
             <CardHeader className="text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">

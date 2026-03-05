@@ -1,6 +1,38 @@
 import React, { useState, useEffect, useRef, ChangeEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+
+// ── Image → PDF conversion ────────────────────────────────────────────────────
+
+async function imageToPdf(file: File): Promise<File> {
+  const { jsPDF } = await import('jspdf');
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  const pdf = new jsPDF({
+    orientation: bitmap.width > bitmap.height ? 'landscape' : 'portrait',
+    unit: 'px',
+    format: [bitmap.width, bitmap.height],
+  });
+  pdf.addImage(dataUrl, 'JPEG', 0, 0, bitmap.width, bitmap.height);
+  const blob = pdf.output('blob');
+  return new File([blob], file.name.replace(/\.[^.]+$/, '.pdf'), { type: 'application/pdf' });
+}
+
+async function prepareFiles(rawFiles: File[]): Promise<File[]> {
+  const prepared: File[] = [];
+  for (const f of rawFiles) {
+    if (f.type.startsWith('image/') || /\.(jpe?g|png|webp)$/i.test(f.name)) {
+      prepared.push(await imageToPdf(f));
+    } else if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
+      prepared.push(f);
+    }
+  }
+  return prepared;
+}
 import { Textarea } from '@/components/ui/textarea';
 import { Category } from '@/types/database';
 import { Button } from '@/components/ui/button';
@@ -31,6 +63,7 @@ export const ProjectCreationWizard = ({
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   // Step 1 — Brief + Project Details
@@ -87,21 +120,29 @@ export const ProjectCreationWizard = ({
     setExtracting(false);
   };
 
-  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    const files = Array.from(e.target.files);
-    setPendingFiles((prev) => [...prev, ...files]);
+    const raw = Array.from(e.target.files);
     e.target.value = '';
+    setConverting(true);
+    const files = await prepareFiles(raw);
+    setConverting(false);
+    if (!files.length) return;
+    setPendingFiles((prev) => [...prev, ...files]);
     if (files[0]) extractFromFile(files[0]);
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
-    if (extracting) return;
-    const files = Array.from(e.dataTransfer.files).filter((f) =>
+    if (extracting || converting) return;
+    const raw = Array.from(e.dataTransfer.files).filter((f) =>
       /\.(pdf|jpe?g|png|webp)$/i.test(f.name),
     );
+    if (!raw.length) return;
+    setConverting(true);
+    const files = await prepareFiles(raw);
+    setConverting(false);
     if (!files.length) return;
     setPendingFiles((prev) => [...prev, ...files]);
     if (files[0]) extractFromFile(files[0]);
@@ -251,9 +292,9 @@ export const ProjectCreationWizard = ({
             className={`rounded-lg border-2 border-dashed p-6 text-center cursor-pointer transition-colors ${
               isDragging ? 'border-primary bg-primary/5' : 'hover:border-primary/50'
             }`}
-            onClick={() => !extracting && fileInputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); if (!extracting) setIsDragging(true); }}
-            onDragEnter={(e) => { e.preventDefault(); if (!extracting) setIsDragging(true); }}
+            onClick={() => !extracting && !converting && fileInputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); if (!extracting && !converting) setIsDragging(true); }}
+            onDragEnter={(e) => { e.preventDefault(); if (!extracting && !converting) setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
           >
@@ -265,10 +306,10 @@ export const ProjectCreationWizard = ({
               className="hidden"
               onChange={handleFileSelect}
             />
-            {extracting ? (
+            {(converting || extracting) ? (
               <div className="flex flex-col items-center gap-2">
                 <Loader2 className="h-7 w-7 text-muted-foreground animate-spin" />
-                <p className="text-sm text-muted-foreground">Extracting project details…</p>
+                <p className="text-sm text-muted-foreground">{converting ? 'Converting to PDF…' : 'Extracting project details…'}</p>
               </div>
             ) : (
               <>
@@ -348,7 +389,7 @@ export const ProjectCreationWizard = ({
             {onCancel && (
               <Button variant="outline" onClick={onCancel}>Cancel</Button>
             )}
-            <Button onClick={() => setStep(2)} disabled={!name.trim() || extracting}>
+            <Button onClick={() => setStep(2)} disabled={!name.trim() || extracting || converting}>
               Next <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
           </div>

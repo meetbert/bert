@@ -1,6 +1,38 @@
 import { useState, useEffect, useRef, ChangeEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+
+// ── Image → PDF conversion ────────────────────────────────────────────────────
+
+async function imageToPdf(file: File): Promise<File> {
+  const { jsPDF } = await import('jspdf');
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  const pdf = new jsPDF({
+    orientation: bitmap.width > bitmap.height ? 'landscape' : 'portrait',
+    unit: 'px',
+    format: [bitmap.width, bitmap.height],
+  });
+  pdf.addImage(dataUrl, 'JPEG', 0, 0, bitmap.width, bitmap.height);
+  const blob = pdf.output('blob');
+  return new File([blob], file.name.replace(/\.[^.]+$/, '.pdf'), { type: 'application/pdf' });
+}
+
+async function prepareFiles(rawFiles: File[]): Promise<File[]> {
+  const prepared: File[] = [];
+  for (const f of rawFiles) {
+    if (f.type.startsWith('image/') || /\.(jpe?g|png|webp)$/i.test(f.name)) {
+      prepared.push(await imageToPdf(f));
+    } else if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
+      prepared.push(f);
+    }
+  }
+  return prepared;
+}
 import { Textarea } from '@/components/ui/textarea';
 import { Project, Category } from '@/types/database';
 import {
@@ -46,6 +78,7 @@ export const ProjectEditDialog = ({
 
   const [submitting, setSubmitting] = useState(false);
   const [extractingContext, setExtractingContext] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [budgetMode, setBudgetMode] = useState<'total' | 'category'>('total');
   const [manualBudget, setManualBudget] = useState('');
 
@@ -216,21 +249,29 @@ export const ProjectEditDialog = ({
     setExtractingContext(false);
   };
 
-  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    const files = Array.from(e.target.files!);
-    setPendingFiles((prev) => [...prev, ...files]);
+    const raw = Array.from(e.target.files!);
     e.target.value = '';
+    setConverting(true);
+    const files = await prepareFiles(raw);
+    setConverting(false);
+    if (!files.length) return;
+    setPendingFiles((prev) => [...prev, ...files]);
     extractContextFromFiles(files);
   };
 
-  const handleDrop = (e: { preventDefault: () => void; dataTransfer: DataTransfer }) => {
+  const handleDrop = async (e: { preventDefault: () => void; dataTransfer: DataTransfer }) => {
     e.preventDefault();
     setIsDragging(false);
-    if (extractingContext) return;
-    const files = Array.from(e.dataTransfer.files).filter((f) =>
+    if (extractingContext || converting) return;
+    const raw = Array.from(e.dataTransfer.files).filter((f) =>
       /\.(pdf|jpe?g|png|webp)$/i.test(f.name),
     );
+    if (!raw.length) return;
+    setConverting(true);
+    const files = await prepareFiles(raw);
+    setConverting(false);
     if (!files.length) return;
     setPendingFiles((prev) => [...prev, ...files]);
     extractContextFromFiles(files);
@@ -364,8 +405,8 @@ export const ProjectEditDialog = ({
 
             <Card
               className={isDragging ? 'border-primary ring-1 ring-primary' : ''}
-              onDragOver={(e) => { e.preventDefault(); if (!extractingContext) setIsDragging(true); }}
-              onDragEnter={(e) => { e.preventDefault(); if (!extractingContext) setIsDragging(true); }}
+              onDragOver={(e) => { e.preventDefault(); if (!extractingContext && !converting) setIsDragging(true); }}
+              onDragEnter={(e) => { e.preventDefault(); if (!extractingContext && !converting) setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
             >
@@ -386,13 +427,13 @@ export const ProjectEditDialog = ({
                       size="sm"
                       className="h-8 text-muted-foreground"
                       onClick={() => fileInputRef.current?.click()}
-                      disabled={extractingContext}
+                      disabled={extractingContext || converting}
                     >
                       <Upload className="mr-2 h-3.5 w-3.5" /> Upload files
                     </Button>
-                    {extractingContext && (
+                    {(converting || extractingContext) && (
                       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Loader2 className="h-3 w-3 animate-spin" /> Extracting project details…
+                        <Loader2 className="h-3 w-3 animate-spin" /> {converting ? 'Converting to PDF…' : 'Extracting project details…'}
                       </span>
                     )}
                   </div>

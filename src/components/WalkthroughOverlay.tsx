@@ -7,7 +7,10 @@ import { X, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 export const WalkthroughOverlay = () => {
   const { isActive, step, currentStep, totalSteps, next, prev, skip } = useWalkthrough();
   const { stopDemo } = useDemoData();
-  const [rect, setRect] = useState<DOMRect | null>(null);
+  const [, forceUpdate] = useState(0);
+  const rectRef = useRef<DOMRect | null>(null);
+  const spotlightRef = useRef<HTMLDivElement>(null);
+  const svgCutoutRef = useRef<SVGRectElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   const handleSkip = useCallback(() => {
@@ -17,7 +20,6 @@ export const WalkthroughOverlay = () => {
 
   const handleNext = useCallback(() => {
     if (currentStep === totalSteps - 1) {
-      // Last step — finish tour
       skip();
       stopDemo();
     } else {
@@ -25,53 +27,87 @@ export const WalkthroughOverlay = () => {
     }
   }, [currentStep, totalSteps, next, skip, stopDemo]);
 
+  // Directly update DOM elements for zero-lag tracking
+  const applyRect = useCallback((r: DOMRect) => {
+    const pad = 8;
+    // Update SVG cutout
+    if (svgCutoutRef.current) {
+      svgCutoutRef.current.setAttribute('x', String(r.left - pad));
+      svgCutoutRef.current.setAttribute('y', String(r.top - pad));
+      svgCutoutRef.current.setAttribute('width', String(r.width + pad * 2));
+      svgCutoutRef.current.setAttribute('height', String(r.height + pad * 2));
+    }
+    // Update spotlight ring
+    if (spotlightRef.current) {
+      spotlightRef.current.style.top = `${r.top - pad}px`;
+      spotlightRef.current.style.left = `${r.left - pad}px`;
+      spotlightRef.current.style.width = `${r.width + pad * 2}px`;
+      spotlightRef.current.style.height = `${r.height + pad * 2}px`;
+    }
+    // Update tooltip position
+    if (tooltipRef.current) {
+      const spaceBelow = window.innerHeight - r.bottom;
+      if (spaceBelow > 220) {
+        tooltipRef.current.style.top = `${r.bottom + 16}px`;
+        tooltipRef.current.style.left = `${Math.max(16, Math.min(r.left, window.innerWidth - 380))}px`;
+        tooltipRef.current.style.transform = 'none';
+      } else {
+        tooltipRef.current.style.top = `${r.top - 16}px`;
+        tooltipRef.current.style.left = `${Math.max(16, Math.min(r.left, window.innerWidth - 380))}px`;
+        tooltipRef.current.style.transform = 'translateY(-100%)';
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!isActive || !step) return;
 
-    const update = () => {
-      const el = document.querySelector(`[data-tour="${step.target}"]`);
-      if (el) {
-        setRect(el.getBoundingClientRect());
-      } else {
-        setRect(null);
-      }
-    };
+    rectRef.current = null;
 
-    // Initial scroll into view, then start tracking
+    // Initial scroll into view
     const timer = setTimeout(() => {
       const el = document.querySelector(`[data-tour="${step.target}"]`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-      // Start tracking after scroll settles
-      setTimeout(update, 350);
     }, 400);
 
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
-
-    // Use RAF loop so rect always matches the element's current position
+    // RAF loop for continuous tracking
     let rafId: number;
     const track = () => {
-      update();
+      const el = document.querySelector(`[data-tour="${step.target}"]`);
+      if (el) {
+        const r = el.getBoundingClientRect();
+        rectRef.current = r;
+        applyRect(r);
+      }
       rafId = requestAnimationFrame(track);
     };
-    const startRaf = setTimeout(() => { rafId = requestAnimationFrame(track); }, 800);
+
+    // Start tracking after scroll settles
+    const startRaf = setTimeout(() => {
+      // Trigger one React render to show the overlay elements
+      const el = document.querySelector(`[data-tour="${step.target}"]`);
+      if (el) {
+        rectRef.current = el.getBoundingClientRect();
+      }
+      forceUpdate(c => c + 1);
+      rafId = requestAnimationFrame(track);
+    }, 800);
 
     return () => {
       clearTimeout(timer);
       clearTimeout(startRaf);
       cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
     };
-  }, [isActive, step, currentStep]);
+  }, [isActive, step, currentStep, applyRect]);
 
   if (!isActive || !step) return null;
 
+  const rect = rectRef.current;
   const isLastStep = currentStep === totalSteps - 1;
 
-  // Position tooltip below or above the target
+  // Initial tooltip position (will be overridden by RAF)
   const tooltipStyle: React.CSSProperties = {};
   if (rect) {
     const spaceBelow = window.innerHeight - rect.bottom;
@@ -92,12 +128,13 @@ export const WalkthroughOverlay = () => {
   return (
     <>
       {/* Backdrop — SVG-based cutout for true transparency */}
-      <svg className="fixed inset-0 z-[998] w-full h-full" onClick={handleSkip}>
+      <svg className="fixed inset-0 z-[998] w-full h-full pointer-events-auto" onClick={handleSkip}>
         <defs>
           <mask id="tour-mask">
             <rect width="100%" height="100%" fill="white" />
             {rect && (
               <rect
+                ref={svgCutoutRef}
                 x={rect.left - 8}
                 y={rect.top - 8}
                 width={rect.width + 16}
@@ -119,7 +156,8 @@ export const WalkthroughOverlay = () => {
       {/* Spotlight ring */}
       {rect && (
         <div
-          className="fixed z-[999] rounded-xl ring-2 ring-primary shadow-[0_0_0_4px_hsl(var(--primary)/0.2)] pointer-events-none transition-all duration-300 ease-out"
+          ref={spotlightRef}
+          className="fixed z-[999] rounded-xl ring-2 ring-primary shadow-[0_0_0_4px_hsl(var(--primary)/0.2)] pointer-events-none"
           style={{
             top: rect.top - 8,
             left: rect.left - 8,

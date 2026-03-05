@@ -1,6 +1,9 @@
-import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/Navbar';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { FileText, BarChart3, AlertTriangle } from 'lucide-react';
 
 const features = [
@@ -19,6 +22,25 @@ const features = [
 ];
 
 const Landing = () => {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (loading || !user) return;
+    supabase
+      .from('user_settings')
+      .select('onboarding_done')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.onboarding_done) {
+          navigate('/dashboard', { replace: true });
+        } else {
+          navigate('/onboarding', { replace: true });
+        }
+      });
+  }, [user, loading, navigate]);
+
   return (
     <div className="min-h-screen">
       <Navbar />

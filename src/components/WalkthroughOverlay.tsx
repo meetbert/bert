@@ -64,11 +64,15 @@ export const WalkthroughOverlay = () => {
 
     rectRef.current = null;
 
-    // Initial scroll into view
+    // Initial scroll: position element so tooltip + element are both visible
     const timer = setTimeout(() => {
       const el = document.querySelector(`[data-tour="${step.target}"]`);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const r = el.getBoundingClientRect();
+        const absoluteTop = r.top + window.scrollY;
+        // Place element at ~60% down the viewport, leaving room for tooltip above
+        const targetY = absoluteTop - window.innerHeight * 0.45;
+        window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
       }
     }, 400);
 

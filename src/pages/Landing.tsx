@@ -1,6 +1,9 @@
-import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/Navbar';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { FileText, BarChart3, AlertTriangle } from 'lucide-react';
 
 const features = [

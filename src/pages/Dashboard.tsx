@@ -123,7 +123,7 @@ const Dashboard = () => {
         <h1 className="text-2xl font-bold">Dashboard</h1>
 
         {/* KPI Row */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div data-tour="kpi-row" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <button onClick={() => setKpiFilter(null)} className="text-left">
             <Card className={`h-full transition-shadow hover:shadow-md ${kpiFilter === null ? 'ring-2 ring-primary' : ''}`}>
               <CardContent className="flex items-center gap-3 p-4">
@@ -214,7 +214,7 @@ const Dashboard = () => {
 
         {/* Monthly Spend Chart */}
         {!kpiFilter && (
-          <Card>
+          <Card data-tour="monthly-spend">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-sm">Monthly Spend</CardTitle>
               <Select value={timeRange} onValueChange={setTimeRange}>
@@ -247,7 +247,7 @@ const Dashboard = () => {
 
         {/* Project budgets — per-category progress bars */}
         {activeProjects.length > 0 && !kpiFilter && (
-          <div>
+          <div data-tour="project-budgets">
             <h2 className="mb-4 text-lg font-semibold">Project Budgets</h2>
             <div className="grid gap-4 lg:grid-cols-2">
               {activeProjects.map((p) => {

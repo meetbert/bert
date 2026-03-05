@@ -5,10 +5,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Navbar } from '@/components/Navbar';
-import { Check } from 'lucide-react';
+import { Check, FileText, Table } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ProjectCreationWizard } from '@/components/ProjectCreationWizard';
+import { ImportModal } from '@/components/ImportModal';
 import { useWalkthrough } from '@/contexts/WalkthroughContext';
 import { useDemoData } from '@/contexts/DemoDataContext';
 import { SUPPORTED_CURRENCIES, currencySymbol } from '@/lib/currency';
@@ -19,8 +20,13 @@ const Onboarding = () => {
   const { start: startWalkthrough } = useWalkthrough();
   const { startDemo } = useDemoData();
   const [step, setStep] = useState(1);
-  const totalSteps = 4;
   const [baseCurrency, setBaseCurrency] = useState('EUR');
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+
+  // Progress: if a project was created, there are 5 steps; otherwise 4 (import step is skipped)
+  const totalSteps = createdProjectId !== null ? 5 : 4;
+  const displayStep = createdProjectId !== null ? step : step === 5 ? 4 : step;
 
   const finishOnboarding = async () => {
     if (!user) return;
@@ -35,8 +41,9 @@ const Onboarding = () => {
     <div className="min-h-screen">
       <Navbar />
       <div className="container max-w-lg py-12">
-        <Progress value={(step / totalSteps) * 100} className="mb-8" />
+        <Progress value={(displayStep / totalSteps) * 100} className="mb-8" />
 
+        {/* ── Step 1: Welcome ─────────────────────────────────────────── */}
         {step === 1 && (
           <Card>
             <CardHeader className="text-center">
@@ -49,6 +56,7 @@ const Onboarding = () => {
           </Card>
         )}
 
+        {/* ── Step 2: Base Currency ────────────────────────────────────── */}
         {step === 2 && (
           <Card>
             <CardHeader>
@@ -73,6 +81,7 @@ const Onboarding = () => {
           </Card>
         )}
 
+        {/* ── Step 3: Create First Project ─────────────────────────────── */}
         {step === 3 && (
           <Card>
             <CardHeader>
@@ -80,9 +89,12 @@ const Onboarding = () => {
               <CardDescription>Set up your project with categories and documents.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <ProjectCreationWizard onComplete={() => setStep(4)} showProgress={false} />
+              <ProjectCreationWizard
+                onComplete={(id) => { setCreatedProjectId(id); setStep(4); }}
+                showProgress={false}
+              />
               <div className="pt-2">
-                <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setStep(4)}>
+                <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setStep(5)}>
                   Skip for now
                 </button>
               </div>
@@ -90,7 +102,52 @@ const Onboarding = () => {
           </Card>
         )}
 
-        {step === 4 && (
+        {/* ── Step 4: Import Invoices (only if project was created) ──────── */}
+        {step === 4 && createdProjectId !== null && (
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle>Import Your Invoices</CardTitle>
+                <CardDescription>
+                  Upload PDFs or a CSV spreadsheet and Bert will extract the details automatically.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setImportOpen(true)}
+                    className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors hover:border-primary/50 hover:bg-secondary/40"
+                  >
+                    <FileText className="h-7 w-7 text-muted-foreground" />
+                    <span className="text-sm font-medium">PDF / Image</span>
+                    <span className="text-xs text-muted-foreground">Upload invoice files</span>
+                  </button>
+                  <button
+                    onClick={() => setImportOpen(true)}
+                    className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors hover:border-primary/50 hover:bg-secondary/40"
+                  >
+                    <Table className="h-7 w-7 text-muted-foreground" />
+                    <span className="text-sm font-medium">CSV / Spreadsheet</span>
+                    <span className="text-xs text-muted-foreground">Import from Excel etc.</span>
+                  </button>
+                </div>
+                <div className="pt-2">
+                  <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setStep(5)}>
+                    Skip for now
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+            <ImportModal
+              open={importOpen}
+              onClose={() => setImportOpen(false)}
+              onImported={() => { setImportOpen(false); setStep(5); }}
+            />
+          </>
+        )}
+
+        {/* ── Step 5: Done ─────────────────────────────────────────────── */}
+        {step === 5 && (
           <Card>
             <CardHeader className="text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">

@@ -106,9 +106,10 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onImported: () => void;
+  projectId?: string;
 }
 
-export const ImportModal = ({ open, onClose, onImported }: Props) => {
+export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => {
   const { session, user } = useAuth();
 
   // ── Queue state ────────────────────────────────────────────────────────────
@@ -216,6 +217,7 @@ export const ImportModal = ({ open, onClose, onImported }: Props) => {
         line_items: editFields.line_items || null,
         document_path: editFields.document_path || null,
         document_hash: editFields.document_hash || null,
+        project_id: projectId ?? null,
         payment_status: 'unpaid',
         processing_status: 'complete',
       });
@@ -275,7 +277,7 @@ export const ImportModal = ({ open, onClose, onImported }: Props) => {
     let inserted = 0;
 
     for (const row of csvRows) {
-      const record: Record<string, any> = { user_id: user?.id, payment_status: 'unpaid', processing_status: 'complete' };
+      const record: Record<string, any> = { user_id: user?.id, project_id: projectId ?? null, payment_status: 'unpaid', processing_status: 'complete' };
       csvHeaders.forEach((h, i) => {
         const f = csvMapping[h];
         if (f && f !== 'skip' && row[i]) record[f] = row[i];

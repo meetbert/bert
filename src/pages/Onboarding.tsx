@@ -150,6 +150,7 @@ const Onboarding = () => {
             <ImportModal
               open={importOpen}
               onClose={() => setImportOpen(false)}
+              projectId={createdProjectId ?? undefined}
               onImported={() => { setImportOpen(false); setStep(5); }}
             />
           </>

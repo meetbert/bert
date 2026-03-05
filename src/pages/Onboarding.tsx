@@ -8,16 +8,20 @@ import { Navbar } from '@/components/Navbar';
 import { Check } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { ProjectCreationWizard } from '@/components/ProjectCreationWizard';
+import { useWalkthrough } from '@/contexts/WalkthroughContext';
 
 const Onboarding = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { start: startWalkthrough } = useWalkthrough();
   const [step, setStep] = useState(1);
   const totalSteps = 3;
 
   const finishOnboarding = async () => {
     if (!user) return;
     await supabase.from('user_settings').upsert({ id: user.id, onboarding_done: true });
+    localStorage.removeItem('bert_walkthrough_done');
+    startWalkthrough();
     navigate('/dashboard', { replace: true });
   };
 

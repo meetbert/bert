@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
-import { Plus, FileText, X, Upload, Loader2, ArrowLeft, ArrowRight, Pencil } from 'lucide-react';
+import { Plus, FileText, X, Upload, Loader2, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
 
@@ -31,13 +31,12 @@ export const ProjectCreationWizard = ({
 
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
-  const [extractingContext, setExtractingContext] = useState(false);
-  const [editingAiContext, setEditingAiContext] = useState(false);
 
   // Step 1 — Project Details
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [aiContext, setAiContext] = useState('');
+  const [knownVendors, setKnownVendors] = useState('');
+  const [knownLocations, setKnownLocations] = useState('');
 
   // Step 2 — Categories & Budgets
   const [budgetMode, setBudgetMode] = useState<'total' | 'category'>('total');
@@ -131,55 +130,11 @@ export const ProjectCreationWizard = ({
 
   // ── File helpers ──────────────────────────────────────────────────
 
-  const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
-
-  const extractContextFromFiles = async (files: File[]) => {
-    setExtractingContext(true);
-    const parts: string[] = [];
-    let failed = 0;
-    for (const file of files) {
-      try {
-        const form = new FormData();
-        form.append('file', file);
-        const resp = await fetch(`${BACKEND}/api/projects/extract-context`, {
-          method: 'POST',
-          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-          body: form,
-        });
-        console.log('[extract-context] status:', resp.status);
-        if (resp.ok) {
-          const json = await resp.json();
-          console.log('[extract-context] response:', json);
-          const extracted = json.description;
-          if (extracted) parts.push(`From ${file.name}:\n${extracted}`);
-        } else {
-          const err = await resp.json().catch(() => ({}));
-          console.error('[extract-context] failed:', resp.status, err);
-          failed++;
-        }
-      } catch (e) {
-        console.error('Extract context network error:', e);
-        failed++;
-      }
-    }
-    if (parts.length > 0) {
-      setAiContext((prev) => {
-        const separator = prev.trim() ? '\n\n' : '';
-        return prev.trim() + separator + parts.join('\n\n');
-      });
-      toast({ title: 'Context extracted', description: 'Document context added below.' });
-    } else if (failed > 0) {
-      toast({ title: 'Extraction failed', description: 'Could not reach the backend. Check it is running and deployed.', variant: 'destructive' });
-    }
-    setExtractingContext(false);
-  };
-
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
     setPendingFiles((prev) => [...prev, ...files]);
     e.target.value = '';
-    extractContextFromFiles(files);
   };
 
   const removeFile = (index: number) => {
@@ -194,12 +149,14 @@ export const ProjectCreationWizard = ({
 
     try {
       // 1. Insert project
+      const parseList = (text: string) => text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .insert({
           name: name.trim(),
           description: description.trim() || null,
-          ai_context: aiContext.trim() || null,
+          known_vendors: parseList(knownVendors),
+          known_locations: parseList(knownLocations),
           status: 'Active',
           budget: budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget,
           user_id: user.id,
@@ -289,9 +246,31 @@ export const ProjectCreationWizard = ({
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is this project? Add context here, or upload documents in Step 3 and we'll extract it automatically."
+              placeholder="What is this project? Add context here, or upload documents in Step 3."
               className="min-h-[80px] resize-none text-sm"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Known Vendors <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Textarea
+              value={knownVendors}
+              onChange={(e) => setKnownVendors(e.target.value)}
+              placeholder="e.g. ACME Productions, Studio X, Catering Co"
+              className="min-h-[60px] resize-none text-sm"
+            />
+            <p className="text-xs text-muted-foreground">Separate with commas or new lines. Used by AI when assigning invoices.</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Known Locations <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Textarea
+              value={knownLocations}
+              onChange={(e) => setKnownLocations(e.target.value)}
+              placeholder="e.g. Pinewood Studios, Location X, London"
+              className="min-h-[60px] resize-none text-sm"
+            />
+            <p className="text-xs text-muted-foreground">Separate with commas or new lines. Used by AI when assigning invoices.</p>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -500,58 +479,6 @@ export const ProjectCreationWizard = ({
               ))}
             </div>
           )}
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Extracted context</Label>
-              <div className="flex items-center gap-2">
-                {extractingContext && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Extracting…
-                  </span>
-                )}
-                {!editingAiContext && !extractingContext && (
-                  <button
-                    type="button"
-                    onClick={() => setEditingAiContext(true)}
-                    className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
-                    title="Edit"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                {editingAiContext && (
-                  <button
-                    type="button"
-                    onClick={() => setEditingAiContext(false)}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Done
-                  </button>
-                )}
-              </div>
-            </div>
-            {editingAiContext ? (
-              <Textarea
-                autoFocus
-                value={aiContext}
-                onChange={(e) => setAiContext(e.target.value)}
-                className="min-h-[100px] resize-none text-sm"
-              />
-            ) : (
-              <div
-                className="rounded-md border bg-secondary/20 px-3 py-2.5 text-sm text-muted-foreground whitespace-pre-line min-h-[80px] cursor-pointer"
-                onClick={() => setEditingAiContext(true)}
-              >
-                {aiContext || (
-                  <span className="italic opacity-50">
-                    Upload documents above and we'll extract key project context here — vendors, budget, scope, timeline.
-                  </span>
-                )}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">This is seen by the AI when assigning invoices to this project.</p>
-          </div>
 
           <div className="flex justify-between pt-2">
             <Button variant="outline" onClick={() => setStep(2)}>

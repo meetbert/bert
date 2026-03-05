@@ -53,6 +53,8 @@ export const ProjectEditDialog = ({
   // Details
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [knownVendors, setKnownVendors] = useState('');
+  const [knownLocations, setKnownLocations] = useState('');
   const [aiContext, setAiContext] = useState('');
   const [status, setStatus] = useState<'Active' | 'Completed' | 'Archived'>(project.status as 'Active' | 'Completed' | 'Archived');
 
@@ -76,6 +78,8 @@ export const ProjectEditDialog = ({
 
     setName(project.name);
     setDescription(project.description ?? '');
+    setKnownVendors((project.known_vendors ?? []).join(', '));
+    setKnownLocations((project.known_locations ?? []).join(', '));
     setAiContext(project.ai_context ?? '');
     setEditingAiContext(false);
     setStatus(project.status as 'Active' | 'Completed' | 'Archived');
@@ -253,10 +257,19 @@ export const ProjectEditDialog = ({
     setSubmitting(true);
 
     try {
+      const parseList = (text: string) => text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
       const budgetToSave = budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget;
       const { error: projError } = await supabase
         .from('projects')
-        .update({ name: name.trim(), description: description.trim() || null, ai_context: aiContext.trim() || null, status, budget: budgetToSave })
+        .update({
+          name: name.trim(),
+          description: description.trim() || null,
+          known_vendors: parseList(knownVendors),
+          known_locations: parseList(knownLocations),
+          ai_context: aiContext.trim() || null,
+          status,
+          budget: budgetToSave,
+        })
         .eq('id', project.id);
       if (projError) throw projError;
 
@@ -379,55 +392,24 @@ export const ProjectEditDialog = ({
                   />
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Extracted from project documents</Label>
-                    <div className="flex items-center gap-2">
-                      {extractingContext && (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Loader2 className="h-3 w-3 animate-spin" /> Extracting…
-                        </span>
-                      )}
-                      {!editingAiContext && !extractingContext && (
-                        <button
-                          type="button"
-                          onClick={() => setEditingAiContext(true)}
-                          className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                      {editingAiContext && (
-                        <button
-                          type="button"
-                          onClick={() => setEditingAiContext(false)}
-                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          Done
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {editingAiContext ? (
-                    <Textarea
-                      autoFocus
-                      value={aiContext}
-                      onChange={(e) => setAiContext(e.target.value)}
-                      className="min-h-[100px] resize-none text-sm"
-                    />
-                  ) : (
-                    <div
-                      className="rounded-md border bg-secondary/20 px-3 py-2.5 text-sm text-muted-foreground whitespace-pre-line min-h-[80px] cursor-pointer"
-                      onClick={() => setEditingAiContext(true)}
-                    >
-                      {aiContext || (
-                        <span className="italic opacity-50">
-                          Upload a document below and we'll extract key project context here automatically.
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-xs text-muted-foreground">Both fields are seen by the AI when assigning invoices and answering questions.</p>
+                  <Label>Known Vendors <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Textarea
+                    value={knownVendors}
+                    onChange={(e) => setKnownVendors(e.target.value)}
+                    placeholder="e.g. ACME Productions, Studio X, Catering Co"
+                    className="min-h-[60px] resize-none text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">Separate with commas or new lines. Used by AI when assigning invoices.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Known Locations <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Textarea
+                    value={knownLocations}
+                    onChange={(e) => setKnownLocations(e.target.value)}
+                    placeholder="e.g. Pinewood Studios, Location X, London"
+                    className="min-h-[60px] resize-none text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">Separate with commas or new lines. Used by AI when assigning invoices.</p>
                 </div>
               </CardContent>
             </Card>
@@ -658,6 +640,59 @@ export const ProjectEditDialog = ({
                   >
                     <Upload className="mr-2 h-3.5 w-3.5" /> Upload files
                   </Button>
+                </div>
+
+                {/* Extracted context */}
+                <div className="border-t px-5 py-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Extracted context</span>
+                    <div className="flex items-center gap-2">
+                      {extractingContext && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" /> Extracting…
+                        </span>
+                      )}
+                      {!editingAiContext && !extractingContext && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingAiContext(true)}
+                          className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
+                          title="Edit"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {editingAiContext && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingAiContext(false)}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Done
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {editingAiContext ? (
+                    <Textarea
+                      autoFocus
+                      value={aiContext}
+                      onChange={(e) => setAiContext(e.target.value)}
+                      className="min-h-[100px] resize-none text-sm"
+                    />
+                  ) : (
+                    <div
+                      className="rounded-md border bg-secondary/20 px-3 py-2.5 text-sm text-muted-foreground whitespace-pre-line min-h-[80px] cursor-pointer"
+                      onClick={() => setEditingAiContext(true)}
+                    >
+                      {aiContext || (
+                        <span className="italic opacity-50">
+                          Upload a document above and we'll extract key project context here automatically.
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">Seen by the AI when assigning invoices and answering questions.</p>
                 </div>
               </CardContent>
             </Card>

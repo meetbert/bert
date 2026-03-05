@@ -71,6 +71,7 @@ export const ProjectEditDialog = ({
   const [existingDocs, setExistingDocs] = useState<ExistingDoc[]>([]);
   const [docsToDelete, setDocsToDelete] = useState<Set<string>>(new Set());
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Load current data when sheet opens
   useEffect(() => {
@@ -190,8 +191,7 @@ export const ProjectEditDialog = ({
 
   const extractContextFromFiles = async (files: File[]) => {
     setExtractingContext(true);
-    const parts: string[] = [];
-    let failed = 0;
+    let anySuccess = false;
     for (const file of files) {
       try {
         const form = new FormData();
@@ -201,30 +201,27 @@ export const ProjectEditDialog = ({
           headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
           body: form,
         });
-        console.log('[extract-context] status:', resp.status);
         if (resp.ok) {
           const json = await resp.json();
-          console.log('[extract-context] response:', json);
-          const extracted = json.description;
-          if (extracted) parts.push(`From ${file.name}:\n${extracted}`);
-        } else {
-          const err = await resp.json().catch(() => ({}));
-          console.error('[extract-context] failed:', resp.status, err);
-          failed++;
+          if (json.description) setDescription((prev) => prev.trim() ? prev : json.description);
+          if (json.known_vendors?.length) setKnownVendors(json.known_vendors.join(', '));
+          if (json.known_locations?.length) setKnownLocations(json.known_locations.join(', '));
+          if (json.description) {
+            setAiContext((prev) => {
+              const separator = prev.trim() ? '\n\n' : '';
+              return prev.trim() + separator + `From ${file.name}:\n${json.description}`;
+            });
+          }
+          anySuccess = true;
         }
-      } catch (e) {
-        console.error('Extract context network error:', e);
-        failed++;
+      } catch {
+        // ignore per-file errors
       }
     }
-    if (parts.length > 0) {
-      setAiContext((prev) => {
-        const separator = prev.trim() ? '\n\n' : '';
-        return prev.trim() + separator + parts.join('\n\n');
-      });
-      toast({ title: 'Context extracted', description: 'Document context has been added below.' });
-    } else if (failed > 0) {
-      toast({ title: 'Extraction failed', description: 'Could not reach the backend. Check it is running and deployed.', variant: 'destructive' });
+    if (anySuccess) {
+      toast({ title: 'Brief extracted', description: 'Project details updated below — review and edit as needed.' });
+    } else {
+      toast({ title: 'Extraction failed', description: 'Could not reach the backend.', variant: 'destructive' });
     }
     setExtractingContext(false);
   };
@@ -234,6 +231,18 @@ export const ProjectEditDialog = ({
     const files = Array.from(e.target.files!);
     setPendingFiles((prev) => [...prev, ...files]);
     e.target.value = '';
+    extractContextFromFiles(files);
+  };
+
+  const handleDrop = (e: { preventDefault: () => void; dataTransfer: DataTransfer }) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (extractingContext) return;
+    const files = Array.from(e.dataTransfer.files).filter((f) =>
+      /\.(pdf|jpe?g|png|webp)$/i.test(f.name),
+    );
+    if (!files.length) return;
+    setPendingFiles((prev) => [...prev, ...files]);
     extractContextFromFiles(files);
   };
 
@@ -352,6 +361,162 @@ export const ProjectEditDialog = ({
         </SheetHeader>
 
         <div className="space-y-8 overflow-y-auto flex-1 pb-4">
+          {/* ── Documents ────────────────────────────────────────────── */}
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+                Documents
+              </h3>
+              <span className="text-xs text-muted-foreground">
+                {visibleDocs.length + pendingFiles.length} file
+                {visibleDocs.length + pendingFiles.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <Card
+              className={isDragging ? 'border-primary ring-1 ring-primary' : ''}
+              onDragOver={(e) => { e.preventDefault(); if (!extractingContext) setIsDragging(true); }}
+              onDragEnter={(e) => { e.preventDefault(); if (!extractingContext) setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+            >
+              <CardContent className="p-0">
+                {/* Upload button row — at the top */}
+                <div className="px-5 py-3 border-b">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileSelect}
+                  />
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-muted-foreground"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={extractingContext}
+                    >
+                      <Upload className="mr-2 h-3.5 w-3.5" /> Upload files
+                    </Button>
+                    {extractingContext && (
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Extracting project details…
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Existing docs */}
+                {visibleDocs.length > 0 && (
+                  <div className="divide-y">
+                    {visibleDocs.map((doc) => (
+                      <div key={doc.id} className="flex items-center gap-3 px-5 py-3">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="flex-1 text-sm truncate">{doc.file_name}</span>
+                        <button
+                          onClick={() => toggleDeleteDoc(doc.id)}
+                          className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                          title="Remove document"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Pending uploads */}
+                {pendingFiles.length > 0 && (
+                  <div className={`divide-y ${visibleDocs.length > 0 ? 'border-t' : ''}`}>
+                    {pendingFiles.map((file, i) => (
+                      <div key={i} className="flex items-center gap-3 px-5 py-3 bg-secondary/20">
+                        <Upload className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="flex-1 text-sm truncate">{file.name}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {(file.size / 1024).toFixed(0)} KB
+                        </span>
+                        <button
+                          onClick={() => removePendingFile(i)}
+                          className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {visibleDocs.length === 0 && pendingFiles.length === 0 && (
+                  <div className="px-5 py-6 text-center">
+                    <FileText className="mx-auto h-7 w-7 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground">No documents yet</p>
+                  </div>
+                )}
+
+                {/* Extracted context */}
+                <div className="border-t px-5 py-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Extracted context</span>
+                    <div className="flex items-center gap-2">
+                      {!editingAiContext && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingAiContext(true)}
+                          className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
+                          title="Edit"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {editingAiContext && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingAiContext(false)}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Done
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {editingAiContext ? (
+                    <Textarea
+                      autoFocus
+                      value={aiContext}
+                      onChange={(e) => setAiContext(e.target.value)}
+                      className="min-h-[100px] resize-none text-sm"
+                    />
+                  ) : (
+                    <div
+                      className="rounded-md border bg-secondary/20 px-3 py-2.5 text-sm text-muted-foreground whitespace-pre-line min-h-[80px] cursor-pointer"
+                      onClick={() => setEditingAiContext(true)}
+                    >
+                      {aiContext || (
+                        <span className="italic opacity-50">
+                          Upload a document above and we'll extract key project context here automatically.
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">Seen by the AI when assigning invoices and answering questions.</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {docsToDelete.size > 0 && (
+              <p className="mt-2 text-xs text-destructive">
+                {docsToDelete.size} document{docsToDelete.size > 1 ? 's' : ''} will be removed on save.{' '}
+                <button className="underline hover:no-underline" onClick={() => setDocsToDelete(new Set())}>
+                  Undo
+                </button>
+              </p>
+            )}
+          </section>
+
           {/* ── General ──────────────────────────────────────────────── */}
           <section>
             <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-4">
@@ -548,168 +713,6 @@ export const ProjectEditDialog = ({
             </Card>
           </section>
 
-          {/* ── Documents ────────────────────────────────────────────── */}
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                Documents
-              </h3>
-              <span className="text-xs text-muted-foreground">
-                {visibleDocs.length + pendingFiles.length} file
-                {visibleDocs.length + pendingFiles.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-
-            <Card>
-              <CardContent className="p-0">
-                {/* Existing docs */}
-                {visibleDocs.length > 0 && (
-                  <div className="divide-y">
-                    {visibleDocs.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center gap-3 px-5 py-3"
-                      >
-                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="flex-1 text-sm truncate">
-                          {doc.file_name}
-                        </span>
-                        <button
-                          onClick={() => toggleDeleteDoc(doc.id)}
-                          className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                          title="Remove document"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Pending uploads */}
-                {pendingFiles.length > 0 && (
-                  <div className={`divide-y ${visibleDocs.length > 0 ? 'border-t' : ''}`}>
-                    {pendingFiles.map((file, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-3 px-5 py-3 bg-secondary/20"
-                      >
-                        <Upload className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="flex-1 text-sm truncate">
-                          {file.name}
-                        </span>
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          {(file.size / 1024).toFixed(0)} KB
-                        </span>
-                        <button
-                          onClick={() => removePendingFile(i)}
-                          className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Empty state */}
-                {visibleDocs.length === 0 && pendingFiles.length === 0 && (
-                  <div className="px-5 py-8 text-center">
-                    <FileText className="mx-auto h-8 w-8 text-muted-foreground/40 mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      No documents yet
-                    </p>
-                  </div>
-                )}
-
-                {/* Upload button row */}
-                <div className="border-t px-5 py-3">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.webp"
-                    multiple
-                    className="hidden"
-                    onChange={handleFileSelect}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-muted-foreground"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload className="mr-2 h-3.5 w-3.5" /> Upload files
-                  </Button>
-                </div>
-
-                {/* Extracted context */}
-                <div className="border-t px-5 py-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Extracted context</span>
-                    <div className="flex items-center gap-2">
-                      {extractingContext && (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Loader2 className="h-3 w-3 animate-spin" /> Extracting…
-                        </span>
-                      )}
-                      {!editingAiContext && !extractingContext && (
-                        <button
-                          type="button"
-                          onClick={() => setEditingAiContext(true)}
-                          className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                      {editingAiContext && (
-                        <button
-                          type="button"
-                          onClick={() => setEditingAiContext(false)}
-                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          Done
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {editingAiContext ? (
-                    <Textarea
-                      autoFocus
-                      value={aiContext}
-                      onChange={(e) => setAiContext(e.target.value)}
-                      className="min-h-[100px] resize-none text-sm"
-                    />
-                  ) : (
-                    <div
-                      className="rounded-md border bg-secondary/20 px-3 py-2.5 text-sm text-muted-foreground whitespace-pre-line min-h-[80px] cursor-pointer"
-                      onClick={() => setEditingAiContext(true)}
-                    >
-                      {aiContext || (
-                        <span className="italic opacity-50">
-                          Upload a document above and we'll extract key project context here automatically.
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-xs text-muted-foreground">Seen by the AI when assigning invoices and answering questions.</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {docsToDelete.size > 0 && (
-              <p className="mt-2 text-xs text-destructive">
-                {docsToDelete.size} document
-                {docsToDelete.size > 1 ? 's' : ''} will be removed on save.{' '}
-                <button
-                  className="underline hover:no-underline"
-                  onClick={() => setDocsToDelete(new Set())}
-                >
-                  Undo
-                </button>
-              </p>
-            )}
-          </section>
         </div>
 
         {/* ── Footer ──────────────────────────────────────────────────── */}

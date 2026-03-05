@@ -3,8 +3,10 @@
 # Project-level utilities: extract project context from uploaded documents.
 
 import base64
+import json
 import logging
 import os
+import re
 
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -23,20 +25,24 @@ _MIME_TYPES = {
 }
 
 _CONTEXT_SYSTEM = """\
-You are a project context extractor for a production accounting system. \
-A user has uploaded a document to their project (brief, budget sheet, script, contract, etc.).
+You are a project context extractor for a production accounting system.
+A user has uploaded a document (brief, budget sheet, script, contract, etc.) to seed a new project.
 
-Extract and summarise the key information that would help an invoice processing AI \
-understand what this project is about. Focus on:
-- Project type or nature (e.g. short film, commercial, music video, corporate event)
-- Scope and objectives
-- Key vendors, crew, or contractors mentioned
-- Budget figures or ranges
-- Filming locations, schedule, or timeline
-- Any other context relevant for matching invoices to this project
+Return ONLY a raw JSON object — no markdown, no code fences, no preamble — with exactly these four keys:
 
-Write a concise, factual summary in 3–6 plain English sentences. \
-No bullet points, no headings, no markdown."""
+{
+  "name": "<production / project / film title if clearly stated, otherwise null>",
+  "description": "<1-2 sentences in plain English summarising what this project is. Do NOT include lists, JSON, or structured data.>",
+  "known_vendors": ["<vendor name>", "<supplier name>", "<service company>"],
+  "known_locations": ["<filming location>", "<studio name>", "<city or venue>"]
+}
+
+Rules:
+- "name": string or null. Extract the official title from the document.
+- "description": 1-2 sentences only. Concise natural-language summary of the project type, purpose, and scope. Never paste raw data or lists here.
+- "known_vendors": array of up to 10 strings — company, crew, or contractor names found in the document. Empty array if none found.
+- "known_locations": array of up to 10 strings — filming locations, studios, venues, or cities. Empty array if none found.
+- Output ONLY the JSON object. No ```json fences. No explanation. No extra keys."""
 
 
 @router.post("/extract-context")
@@ -93,4 +99,25 @@ async def extract_project_context(
         log.error("extract-context: failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Extraction failed: {e}")
 
-    return {"description": text.strip()}
+    # Strip markdown code fences the LLM may have added despite instructions
+    text_clean = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.IGNORECASE)
+    text_clean = re.sub(r"\s*```$", "", text_clean).strip()
+
+    try:
+        data = json.loads(text_clean)
+        name = data.get("name")
+        description = (data.get("description") or "").strip()
+        vendors  = [v for v in (data.get("known_vendors")   or []) if isinstance(v, str) and v.strip()]
+        locations = [l for l in (data.get("known_locations") or []) if isinstance(l, str) and l.strip()]
+        log.info("extract-context: name=%r desc_len=%d vendors=%d locations=%d",
+                 name, len(description), len(vendors), len(locations))
+        return {
+            "name":            name or None,
+            "description":     description,
+            "known_vendors":   vendors,
+            "known_locations": locations,
+        }
+    except (json.JSONDecodeError, AttributeError) as exc:
+        log.error("extract-context: could not parse JSON response (%s). Raw: %s", exc, text_clean[:300])
+        # Return empty fields — do not dump raw JSON/text into the description field
+        return {"name": None, "description": "", "known_vendors": [], "known_locations": []}

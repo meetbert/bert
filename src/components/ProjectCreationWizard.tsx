@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef, ChangeEvent } from 'react';
+import React, { useState, useEffect, useRef, ChangeEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Textarea } from '@/components/ui/textarea';
 import { Category } from '@/types/database';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,8 +30,11 @@ export const ProjectCreationWizard = ({
 
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
-  // Step 1 — Project Details
+  // Step 1 — Brief + Project Details
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [knownVendors, setKnownVendors] = useState('');
@@ -45,8 +47,7 @@ export const ProjectCreationWizard = ({
   const [selectedCategories, setSelectedCategories] = useState<Map<string, number>>(new Map());
   const [newCategoryName, setNewCategoryName] = useState('');
 
-  // Step 3 — Documents
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
 
   useEffect(() => {
     supabase
@@ -56,21 +57,67 @@ export const ProjectCreationWizard = ({
       .then(({ data }) => setAvailableCategories(data ?? []));
   }, []);
 
-  const totalBudget = Array.from(selectedCategories.values()).reduce(
-    (sum, b) => sum + b,
-    0,
-  );
+  const totalBudget = Array.from(selectedCategories.values()).reduce((sum, b) => sum + b, 0);
+
+  // ── Brief extraction ──────────────────────────────────────────────
+
+  const extractFromFile = async (file: File) => {
+    setExtracting(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const resp = await fetch(`${BACKEND}/api/projects/extract-context`, {
+        method: 'POST',
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        body: form,
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json.name && !name.trim()) setName(json.name);
+        if (json.description) setDescription((prev) => prev.trim() ? prev : json.description);
+        if (json.known_vendors?.length) setKnownVendors(json.known_vendors.join(', '));
+        if (json.known_locations?.length) setKnownLocations(json.known_locations.join(', '));
+        toast({ title: 'Brief extracted', description: 'Project details filled in below — review and edit as needed.' });
+      } else {
+        toast({ title: 'Extraction failed', description: 'Could not read the brief. Fill in details manually.', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Extraction failed', description: 'Could not reach the backend.', variant: 'destructive' });
+    }
+    setExtracting(false);
+  };
+
+  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    setPendingFiles((prev) => [...prev, ...files]);
+    e.target.value = '';
+    if (files[0]) extractFromFile(files[0]);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (extracting) return;
+    const files = Array.from(e.dataTransfer.files).filter((f) =>
+      /\.(pdf|jpe?g|png|webp)$/i.test(f.name),
+    );
+    if (!files.length) return;
+    setPendingFiles((prev) => [...prev, ...files]);
+    if (files[0]) extractFromFile(files[0]);
+  };
+
+  const removeFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
 
   // ── Category helpers ──────────────────────────────────────────────
 
   const toggleCategory = (id: string) => {
     setSelectedCategories((prev) => {
       const next = new Map(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.set(id, 0);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.set(id, 0);
       return next;
     });
   };
@@ -87,7 +134,6 @@ export const ProjectCreationWizard = ({
     const trimmed = newCategoryName.trim();
     if (!trimmed) return;
 
-    // Try to insert; if name collision, look up existing
     const { data, error } = await supabase
       .from('invoice_categories')
       .insert({ name: trimmed })
@@ -95,16 +141,14 @@ export const ProjectCreationWizard = ({
       .single();
 
     if (error) {
-      // Likely unique constraint violation — find existing
       const { data: existing } = await supabase
         .from('invoice_categories')
         .select('id, name')
         .eq('name', trimmed)
         .single();
       if (existing) {
-        if (!availableCategories.find((c) => c.id === existing.id)) {
+        if (!availableCategories.find((c) => c.id === existing.id))
           setAvailableCategories((prev) => [...prev, existing]);
-        }
         setSelectedCategories((prev) => {
           const next = new Map(prev);
           if (!next.has(existing.id)) next.set(existing.id, 0);
@@ -128,19 +172,6 @@ export const ProjectCreationWizard = ({
     }
   };
 
-  // ── File helpers ──────────────────────────────────────────────────
-
-  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    const files = Array.from(e.target.files);
-    setPendingFiles((prev) => [...prev, ...files]);
-    e.target.value = '';
-  };
-
-  const removeFile = (index: number) => {
-    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
   // ── Create project ────────────────────────────────────────────────
 
   const handleCreateProject = async () => {
@@ -148,8 +179,8 @@ export const ProjectCreationWizard = ({
     setSubmitting(true);
 
     try {
-      // 1. Insert project
-      const parseList = (text: string) => text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+      const parseList = (text: string) => text.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .insert({
@@ -167,22 +198,16 @@ export const ProjectCreationWizard = ({
       if (projectError) throw projectError;
       const projectId = project.id;
 
-      // 2. Bulk insert project_categories
       if (selectedCategories.size > 0) {
-        const rows = Array.from(selectedCategories.entries()).map(
-          ([categoryId, budget]) => ({
-            project_id: projectId,
-            category_id: categoryId,
-            budget,
-          }),
-        );
-        const { error: catError } = await supabase
-          .from('project_categories')
-          .insert(rows);
+        const rows = Array.from(selectedCategories.entries()).map(([categoryId, budget]) => ({
+          project_id: projectId,
+          category_id: categoryId,
+          budget,
+        }));
+        const { error: catError } = await supabase.from('project_categories').insert(rows);
         if (catError) throw catError;
       }
 
-      // 3. Upload documents + insert project_documents
       for (const file of pendingFiles) {
         const storagePath = `${user.id}/${projectId}/${Date.now()}_${file.name}`;
         const { error: uploadError } = await supabase.storage
@@ -192,22 +217,14 @@ export const ProjectCreationWizard = ({
 
         const { error: docError } = await supabase
           .from('project_documents')
-          .insert({
-            project_id: projectId,
-            file_name: file.name,
-            storage_path: storagePath,
-          });
+          .insert({ project_id: projectId, file_name: file.name, storage_path: storagePath });
         if (docError) throw docError;
       }
 
       toast({ title: 'Project created', description: `"${name}" is ready.` });
       onComplete(projectId);
     } catch (err: any) {
-      toast({
-        title: 'Error creating project',
-        description: err.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Error creating project', description: err.message, variant: 'destructive' });
     } finally {
       setSubmitting(false);
     }
@@ -217,27 +234,81 @@ export const ProjectCreationWizard = ({
 
   return (
     <div className="space-y-6">
-      {showProgress && (
-        <Progress value={(step / 3) * 100} className="mb-2" />
-      )}
+      {showProgress && <Progress value={(step / 2) * 100} className="mb-2" />}
 
-      {/* ── Step 1: Project Details ──────────────────────────────────── */}
+      {/* ── Step 1: Brief + Project Details ──────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
           <div>
-            <h3 className="font-semibold">Project Details</h3>
+            <h3 className="font-semibold">Upload a Project Brief</h3>
             <p className="text-sm text-muted-foreground">
-              Name your project to get started.
+              Upload a brief, budget, or script and we'll fill in the details automatically — or skip and fill them in manually.
             </p>
           </div>
 
-          <div className="space-y-2">
+          {/* Upload area */}
+          <div
+            className={`rounded-lg border-2 border-dashed p-6 text-center cursor-pointer transition-colors ${
+              isDragging ? 'border-primary bg-primary/5' : 'hover:border-primary/50'
+            }`}
+            onClick={() => !extracting && fileInputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); if (!extracting) setIsDragging(true); }}
+            onDragEnter={(e) => { e.preventDefault(); if (!extracting) setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              multiple
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            {extracting ? (
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-7 w-7 text-muted-foreground animate-spin" />
+                <p className="text-sm text-muted-foreground">Extracting project details…</p>
+              </div>
+            ) : (
+              <>
+                <Upload className="mx-auto h-7 w-7 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground mb-2">Click to upload a brief, budget, or script</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                >
+                  Choose File
+                </Button>
+              </>
+            )}
+          </div>
+
+          {/* File list */}
+          {pendingFiles.length > 0 && (
+            <div className="space-y-1.5">
+              {pendingFiles.map((file, i) => (
+                <div key={i} className="flex items-center gap-2 rounded-lg border px-3 py-2">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="flex-1 text-sm truncate">{file.name}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{(file.size / 1024).toFixed(0)} KB</span>
+                  <button onClick={() => removeFile(i)} className="rounded p-1 text-muted-foreground hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Project Details */}
+          <div className="space-y-2 pt-1">
             <Label>Project Name</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="My First Production"
-              autoFocus
+              autoFocus={pendingFiles.length === 0}
             />
           </div>
 
@@ -246,8 +317,8 @@ export const ProjectCreationWizard = ({
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is this project? Add context here, or upload documents in Step 3."
-              className="min-h-[80px] resize-none text-sm"
+              placeholder="What is this project?"
+              className="min-h-[72px] resize-none text-sm"
             />
           </div>
 
@@ -257,7 +328,7 @@ export const ProjectCreationWizard = ({
               value={knownVendors}
               onChange={(e) => setKnownVendors(e.target.value)}
               placeholder="e.g. ACME Productions, Studio X, Catering Co"
-              className="min-h-[60px] resize-none text-sm"
+              className="min-h-[56px] resize-none text-sm"
             />
             <p className="text-xs text-muted-foreground">Separate with commas or new lines. Used by AI when assigning invoices.</p>
           </div>
@@ -268,18 +339,16 @@ export const ProjectCreationWizard = ({
               value={knownLocations}
               onChange={(e) => setKnownLocations(e.target.value)}
               placeholder="e.g. Pinewood Studios, Location X, London"
-              className="min-h-[60px] resize-none text-sm"
+              className="min-h-[56px] resize-none text-sm"
             />
             <p className="text-xs text-muted-foreground">Separate with commas or new lines. Used by AI when assigning invoices.</p>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
             {onCancel && (
-              <Button variant="outline" onClick={onCancel}>
-                Cancel
-              </Button>
+              <Button variant="outline" onClick={onCancel}>Cancel</Button>
             )}
-            <Button onClick={() => setStep(2)} disabled={!name.trim()}>
+            <Button onClick={() => setStep(2)} disabled={!name.trim() || extracting}>
               Next <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
           </div>
@@ -314,7 +383,6 @@ export const ProjectCreationWizard = ({
             </button>
           </div>
 
-          {/* Total budget input (total mode only) */}
           {budgetMode === 'total' && (
             <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
               <span className="flex-1 text-sm text-muted-foreground">Total budget</span>
@@ -337,26 +405,19 @@ export const ProjectCreationWizard = ({
               return (
                 <div
                   key={cat.id}
-                  className={`flex items-center gap-3 rounded-lg border px-3 h-12 transition-colors ${
-                    isSelected ? 'bg-secondary/30' : ''
-                  }`}
+                  className={`flex items-center gap-3 rounded-lg border px-3 h-12 transition-colors ${isSelected ? 'bg-secondary/30' : ''}`}
                 >
                   <Checkbox
                     checked={isSelected}
                     onCheckedChange={() => toggleCategory(cat.id)}
                     id={`cat-${cat.id}`}
                   />
-                  <label
-                    htmlFor={`cat-${cat.id}`}
-                    className="flex-1 text-sm cursor-pointer"
-                  >
+                  <label htmlFor={`cat-${cat.id}`} className="flex-1 text-sm cursor-pointer">
                     {cat.name}
                   </label>
                   {budgetMode === 'category' && (
                     <div className={`flex items-center gap-2 ${isSelected ? 'visible' : 'invisible'}`}>
-                      <span className="text-xs text-muted-foreground">
-                        {baseCurrency}
-                      </span>
+                      <span className="text-xs text-muted-foreground">{baseCurrency}</span>
                       <Input
                         type="number"
                         min="0"
@@ -365,12 +426,7 @@ export const ProjectCreationWizard = ({
                         tabIndex={isSelected ? 0 : -1}
                         className="w-28 h-8 text-sm text-right"
                         value={isSelected ? (selectedCategories.get(cat.id) || '') : ''}
-                        onChange={(e) =>
-                          setCategoryBudget(
-                            cat.id,
-                            parseFloat(e.target.value) || 0,
-                          )
-                        }
+                        onChange={(e) => setCategoryBudget(cat.id, parseFloat(e.target.value) || 0)}
                       />
                     </div>
                   )}
@@ -379,7 +435,6 @@ export const ProjectCreationWizard = ({
             })}
           </div>
 
-          {/* Add custom category */}
           <div className="flex items-center gap-2">
             <Input
               value={newCategoryName}
@@ -388,106 +443,22 @@ export const ProjectCreationWizard = ({
               className="flex-1"
               onKeyDown={(e) => e.key === 'Enter' && addCustomCategory()}
             />
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={addCustomCategory}
-              disabled={!newCategoryName.trim()}
-            >
+            <Button size="sm" variant="outline" onClick={addCustomCategory} disabled={!newCategoryName.trim()}>
               <Plus className="mr-1 h-3.5 w-3.5" /> Add
             </Button>
           </div>
 
-          {/* Running total */}
           <div className="flex justify-between border-t pt-3 text-sm font-medium">
             <span>Total Budget</span>
-            <span>{formatCurrency(
-              budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget,
-              baseCurrency,
-            )}</span>
+            <span>{formatCurrency(budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget, baseCurrency)}</span>
           </div>
 
           <div className="flex justify-between pt-2">
             <Button variant="outline" onClick={() => setStep(1)}>
               <ArrowLeft className="mr-1 h-4 w-4" /> Back
             </Button>
-            <Button onClick={() => setStep(3)}>
-              Next <ArrowRight className="ml-1 h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Step 3: Upload Documents ─────────────────────────────────── */}
-      {step === 3 && (
-        <div className="space-y-4">
-          <div>
-            <h3 className="font-semibold">Upload Documents</h3>
-            <p className="text-sm text-muted-foreground">
-              Optionally upload briefs, budgets, scripts, or other project
-              documents. These help the AI agent understand your project.
-            </p>
-          </div>
-
-          <div
-            className="rounded-lg border-2 border-dashed p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground mb-3">
-              Click to choose files or drag them here
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.webp"
-              multiple
-              className="hidden"
-              onChange={handleFileSelect}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                fileInputRef.current?.click();
-              }}
-            >
-              Choose Files
-            </Button>
-          </div>
-
-          {pendingFiles.length > 0 && (
-            <div className="space-y-2">
-              {pendingFiles.map((file, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 rounded-lg border px-3 py-2"
-                >
-                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="flex-1 text-sm truncate">{file.name}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {(file.size / 1024).toFixed(0)} KB
-                  </span>
-                  <button
-                    onClick={() => removeFile(i)}
-                    className="rounded p-1 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex justify-between pt-2">
-            <Button variant="outline" onClick={() => setStep(2)}>
-              <ArrowLeft className="mr-1 h-4 w-4" /> Back
-            </Button>
             <Button onClick={handleCreateProject} disabled={submitting}>
-              {submitting && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
+              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Project
             </Button>
           </div>

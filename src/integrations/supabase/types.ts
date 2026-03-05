@@ -231,21 +231,21 @@ export type Database = {
       project_categories: {
         Row: {
           budget: number
-          category_id: string
+          category_id: string | null
           created_at: string
           id: string
           project_id: string
         }
         Insert: {
           budget?: number
-          category_id: string
+          category_id?: string | null
           created_at?: string
           id?: string
           project_id: string
         }
         Update: {
           budget?: number
-          category_id?: string
+          category_id?: string | null
           created_at?: string
           id?: string
           project_id?: string

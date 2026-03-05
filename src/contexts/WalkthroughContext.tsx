@@ -1,42 +1,42 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 export interface TourStep {
   target: string;       // data-tour attribute value
   title: string;
   description: string;
-  route: string;        // page the element lives on
+  route: string;
 }
 
 const TOUR_STEPS: TourStep[] = [
   {
     target: 'kpi-row',
     title: 'Your KPI Overview',
-    description: 'See active projects, outstanding invoices, overdue amounts, and what\'s due this week — all at a glance.',
+    description: 'See active projects, outstanding invoices, overdue payments, and what\'s due this week — all at a glance.',
     route: '/dashboard',
   },
   {
     target: 'monthly-spend',
     title: 'Monthly Spend Chart',
-    description: 'Track your spending over time. Use the dropdown to switch between 3, 6, or 12 month views.',
+    description: 'Track spending over time across all your productions. Use the dropdown to switch between 3, 6, or 12 month views.',
     route: '/dashboard',
   },
   {
     target: 'project-budgets',
     title: 'Project Budgets',
-    description: 'Monitor budget utilisation per project with category breakdowns. Red means over budget.',
+    description: 'Monitor budget utilisation per project. If spending exceeds the budget, the project will appear over budget. (Example: Desert Expedition)',
     route: '/dashboard',
   },
   {
-    target: 'projects-list',
-    title: 'Your Projects',
-    description: 'Manage all your projects here. Create new ones, filter by status, and track budgets.',
+    target: 'add-project-btn',
+    title: 'Create Projects',
+    description: 'Create a project for each production to track invoices and budgets.',
     route: '/projects',
   },
   {
     target: 'invoices-table',
     title: 'Invoice Management',
-    description: 'View, filter, and manage all invoices. Assign projects and categories inline by hovering on a row.',
+    description: 'Assign invoices to projects and categories directly in the table. You can filter, search, and manage all invoices here.',
     route: '/invoices',
   },
 ];

@@ -216,6 +216,7 @@ const Invoices = () => {
 
         <p className="text-xs text-muted-foreground">{filtered.length} invoice{filtered.length !== 1 ? 's' : ''}</p>
 
+        <div data-tour="invoices-table">
         {loading ? (
           <div className="overflow-auto rounded-lg border">
             <table className="w-full text-sm">
@@ -242,7 +243,7 @@ const Invoices = () => {
         ) : paged.length === 0 ? (
           <EmptyState icon={FileText} title="No invoices found" description="Connect your inbox or upload invoices to get started." />
         ) : (
-          <div data-tour="invoices-table" className="overflow-auto rounded-lg border">
+          <div className="overflow-auto rounded-lg border">
             <table className="w-full text-sm">
               <thead><tr className="border-b bg-secondary/30 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 <th className="p-3">Vendor</th><th className="p-3">Date</th><th className="p-3">Due Date</th><th className="p-3">Invoice #</th>

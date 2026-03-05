@@ -330,7 +330,6 @@ export const ProjectCreationWizard = ({
               placeholder="e.g. ACME Productions, Studio X, Catering Co"
               className="min-h-[56px] resize-none text-sm"
             />
-            <p className="text-xs text-muted-foreground">Separate with commas or new lines. Used by AI when assigning invoices.</p>
           </div>
 
           <div className="space-y-2">
@@ -341,8 +340,9 @@ export const ProjectCreationWizard = ({
               placeholder="e.g. Pinewood Studios, Location X, London"
               className="min-h-[56px] resize-none text-sm"
             />
-            <p className="text-xs text-muted-foreground">Separate with commas or new lines. Used by AI when assigning invoices.</p>
           </div>
+
+          <p className="text-xs text-muted-foreground">The description, vendors, and locations above are all seen by the AI when assigning invoices and answering questions about this project.</p>
 
           <div className="flex justify-end gap-2 pt-2">
             {onCancel && (

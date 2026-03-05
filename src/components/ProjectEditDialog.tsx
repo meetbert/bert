@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { Plus, FileText, X, Upload, Loader2, Trash2, Pencil } from 'lucide-react';
+import { Plus, FileText, X, Upload, Loader2, Trash2 } from 'lucide-react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
 
@@ -46,7 +46,6 @@ export const ProjectEditDialog = ({
 
   const [submitting, setSubmitting] = useState(false);
   const [extractingContext, setExtractingContext] = useState(false);
-  const [editingAiContext, setEditingAiContext] = useState(false);
   const [budgetMode, setBudgetMode] = useState<'total' | 'category'>('total');
   const [manualBudget, setManualBudget] = useState('');
 
@@ -55,7 +54,6 @@ export const ProjectEditDialog = ({
   const [description, setDescription] = useState('');
   const [knownVendors, setKnownVendors] = useState('');
   const [knownLocations, setKnownLocations] = useState('');
-  const [aiContext, setAiContext] = useState('');
   const [status, setStatus] = useState<'Active' | 'Completed' | 'Archived'>(project.status as 'Active' | 'Completed' | 'Archived');
 
   // Categories & Budgets
@@ -81,8 +79,6 @@ export const ProjectEditDialog = ({
     setDescription(project.description ?? '');
     setKnownVendors((project.known_vendors ?? []).join(', '));
     setKnownLocations((project.known_locations ?? []).join(', '));
-    setAiContext(project.ai_context ?? '');
-    setEditingAiContext(false);
     setStatus(project.status as 'Active' | 'Completed' | 'Archived');
     setDocsToDelete(new Set());
     setPendingFiles([]);
@@ -206,12 +202,6 @@ export const ProjectEditDialog = ({
           if (json.description) setDescription((prev) => prev.trim() ? prev : json.description);
           if (json.known_vendors?.length) setKnownVendors(json.known_vendors.join(', '));
           if (json.known_locations?.length) setKnownLocations(json.known_locations.join(', '));
-          if (json.description) {
-            setAiContext((prev) => {
-              const separator = prev.trim() ? '\n\n' : '';
-              return prev.trim() + separator + `From ${file.name}:\n${json.description}`;
-            });
-          }
           anySuccess = true;
         }
       } catch {
@@ -275,7 +265,6 @@ export const ProjectEditDialog = ({
           description: description.trim() || null,
           known_vendors: parseList(knownVendors),
           known_locations: parseList(knownLocations),
-          ai_context: aiContext.trim() || null,
           status,
           budget: budgetToSave,
         })
@@ -457,53 +446,6 @@ export const ProjectEditDialog = ({
                   </div>
                 )}
 
-                {/* Extracted context */}
-                <div className="border-t px-5 py-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Extracted context</span>
-                    <div className="flex items-center gap-2">
-                      {!editingAiContext && (
-                        <button
-                          type="button"
-                          onClick={() => setEditingAiContext(true)}
-                          className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                      {editingAiContext && (
-                        <button
-                          type="button"
-                          onClick={() => setEditingAiContext(false)}
-                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          Done
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {editingAiContext ? (
-                    <Textarea
-                      autoFocus
-                      value={aiContext}
-                      onChange={(e) => setAiContext(e.target.value)}
-                      className="min-h-[100px] resize-none text-sm"
-                    />
-                  ) : (
-                    <div
-                      className="rounded-md border bg-secondary/20 px-3 py-2.5 text-sm text-muted-foreground whitespace-pre-line min-h-[80px] cursor-pointer"
-                      onClick={() => setEditingAiContext(true)}
-                    >
-                      {aiContext || (
-                        <span className="italic opacity-50">
-                          Upload a document above and we'll extract key project context here automatically.
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-xs text-muted-foreground">Seen by the AI when assigning invoices and answering questions.</p>
-                </div>
               </CardContent>
             </Card>
 
@@ -564,7 +506,6 @@ export const ProjectEditDialog = ({
                     placeholder="e.g. ACME Productions, Studio X, Catering Co"
                     className="min-h-[60px] resize-none text-sm"
                   />
-                  <p className="text-xs text-muted-foreground">Separate with commas or new lines. Used by AI when assigning invoices.</p>
                 </div>
                 <div className="space-y-2">
                   <Label>Known Locations <span className="text-muted-foreground font-normal">(optional)</span></Label>
@@ -574,8 +515,8 @@ export const ProjectEditDialog = ({
                     placeholder="e.g. Pinewood Studios, Location X, London"
                     className="min-h-[60px] resize-none text-sm"
                   />
-                  <p className="text-xs text-muted-foreground">Separate with commas or new lines. Used by AI when assigning invoices.</p>
                 </div>
+                <p className="text-xs text-muted-foreground border-t pt-3">The description, vendors, and locations above are all seen by the AI when assigning invoices and answering questions about this project.</p>
               </CardContent>
             </Card>
           </section>

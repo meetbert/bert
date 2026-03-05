@@ -293,6 +293,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          ai_context: string | null
           budget: number | null
           created_at: string | null
           description: string | null
@@ -304,6 +305,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ai_context?: string | null
           budget?: number | null
           created_at?: string | null
           description?: string | null
@@ -315,6 +317,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ai_context?: string | null
           budget?: number | null
           created_at?: string | null
           description?: string | null

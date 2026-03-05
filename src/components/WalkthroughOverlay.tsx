@@ -28,22 +28,42 @@ export const WalkthroughOverlay = () => {
   useEffect(() => {
     if (!isActive || !step) return;
 
-    const find = () => {
+    const update = () => {
       const el = document.querySelector(`[data-tour="${step.target}"]`);
       if (el) {
-        const r = el.getBoundingClientRect();
-        setRect(r);
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setRect(el.getBoundingClientRect());
       } else {
         setRect(null);
       }
     };
 
-    const timer = setTimeout(find, 400);
-    window.addEventListener('resize', find);
+    // Initial scroll into view, then start tracking
+    const timer = setTimeout(() => {
+      const el = document.querySelector(`[data-tour="${step.target}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      // Start tracking after scroll settles
+      setTimeout(update, 350);
+    }, 400);
+
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+
+    // Use RAF loop so rect always matches the element's current position
+    let rafId: number;
+    const track = () => {
+      update();
+      rafId = requestAnimationFrame(track);
+    };
+    const startRaf = setTimeout(() => { rafId = requestAnimationFrame(track); }, 800);
+
     return () => {
       clearTimeout(timer);
-      window.removeEventListener('resize', find);
+      clearTimeout(startRaf);
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
     };
   }, [isActive, step, currentStep]);
 

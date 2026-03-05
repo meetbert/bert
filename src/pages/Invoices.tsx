@@ -116,7 +116,7 @@ const Invoices = () => {
   const changeStatus = async (inv: Invoice, newStatus: string) => {
     const { error } = await supabase.from('invoices').update({ payment_status: newStatus }).eq('id', inv.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
+    setRawInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
     toast({ title: `Marked as ${newStatus}` });
   };
 
@@ -124,7 +124,7 @@ const Invoices = () => {
     const { error } = await supabase.from('invoices').update({ project_id: projectId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     const proj = projects.find(p => p.id === projectId);
-    setInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, project_id: projectId, project: proj ?? null } as any : i));
+    setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, project_id: projectId, project: proj ?? null } as any : i));
     toast({ title: 'Project assigned' });
   };
 
@@ -132,7 +132,7 @@ const Invoices = () => {
     const { error } = await supabase.from('invoices').update({ category_id: categoryId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     const cat = categories.find(c => c.id === categoryId);
-    setInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
+    setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
     toast({ title: 'Category assigned' });
   };
 

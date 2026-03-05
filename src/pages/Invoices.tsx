@@ -318,6 +318,7 @@ const Invoices = () => {
             </table>
           </div>
         )}
+        </div>
 
         {/* Pagination */}
         {totalPages > 1 && (

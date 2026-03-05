@@ -7,9 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Navbar } from '@/components/Navbar';
 import { Check } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ProjectCreationWizard } from '@/components/ProjectCreationWizard';
 import { useWalkthrough } from '@/contexts/WalkthroughContext';
 import { useDemoData } from '@/contexts/DemoDataContext';
+import { SUPPORTED_CURRENCIES, currencySymbol } from '@/lib/currency';
 
 const Onboarding = () => {
   const { user } = useAuth();
@@ -17,7 +19,8 @@ const Onboarding = () => {
   const { start: startWalkthrough } = useWalkthrough();
   const { startDemo } = useDemoData();
   const [step, setStep] = useState(1);
-  const totalSteps = 3;
+  const totalSteps = 4;
+  const [baseCurrency, setBaseCurrency] = useState('EUR');
 
   const finishOnboarding = async () => {
     if (!user) return;

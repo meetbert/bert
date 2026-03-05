@@ -24,6 +24,8 @@ const Settings = () => {
   const { startDemo } = useDemoData();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Meetbert.uk inbox (read-only — assigned manually by admin)
   const [inboxAddress, setInboxAddress] = useState<string | null>(null);

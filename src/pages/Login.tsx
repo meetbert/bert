@@ -40,9 +40,14 @@ const Login = () => {
     setLoading(true);
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } });
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } });
         if (error) throw error;
-        toast({ title: 'Check your email', description: 'We sent a confirmation link.' });
+        // Supabase returns a user with an empty identities array when the email is already registered
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+          toast({ title: 'Account already exists', description: 'An account with this email already exists. Please sign in instead.', variant: 'destructive' });
+        } else {
+          toast({ title: 'Check your email', description: 'We sent a confirmation link.' });
+        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;

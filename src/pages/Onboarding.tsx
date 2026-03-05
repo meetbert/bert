@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Navbar } from '@/components/Navbar';
-import { Check, FileText, Table } from 'lucide-react';
+import { ArrowLeft, Check, FileText, Table } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ProjectCreationWizard } from '@/components/ProjectCreationWizard';
@@ -48,7 +48,7 @@ const Onboarding = () => {
           <Card>
             <CardHeader className="text-center">
               <CardTitle className="text-3xl font-bold text-primary">Welcome to Bert.</CardTitle>
-              <CardDescription>Let's set up your workspace in 2 quick steps.</CardDescription>
+              <CardDescription>Let's set up your workspace in a few quick steps.</CardDescription>
             </CardHeader>
             <CardContent>
               <Button className="w-full" onClick={() => setStep(2)}>Let's go →</Button>
@@ -72,11 +72,14 @@ const Onboarding = () => {
                   ))}
                 </SelectContent>
               </Select>
-              <Button className="w-full" onClick={async () => {
-                if (!user) return;
-                await supabase.from('user_settings').upsert({ id: user.id, base_currency: baseCurrency });
-                setStep(3);
-              }}>Continue →</Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="icon" onClick={() => setStep(1)}><ArrowLeft className="h-4 w-4" /></Button>
+                <Button className="w-full" onClick={async () => {
+                  if (!user) return;
+                  await supabase.from('user_settings').upsert({ id: user.id, base_currency: baseCurrency });
+                  setStep(3);
+                }}>Continue →</Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -93,7 +96,10 @@ const Onboarding = () => {
                 onComplete={(id) => { setCreatedProjectId(id); setStep(4); }}
                 showProgress={false}
               />
-              <div className="pt-2">
+              <div className="flex items-center justify-between pt-2">
+                <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" onClick={() => setStep(2)}>
+                  <ArrowLeft className="h-3 w-3" /> Back
+                </button>
                 <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setStep(5)}>
                   Skip for now
                 </button>
@@ -131,7 +137,10 @@ const Onboarding = () => {
                     <span className="text-xs text-muted-foreground">Import from Excel etc.</span>
                   </button>
                 </div>
-                <div className="pt-2">
+                <div className="flex items-center justify-between pt-2">
+                  <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" onClick={() => setStep(3)}>
+                    <ArrowLeft className="h-3 w-3" /> Back
+                  </button>
                   <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setStep(5)}>
                     Skip for now
                   </button>

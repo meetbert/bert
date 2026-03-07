@@ -145,13 +145,26 @@ const Invoices = () => {
     const inv = rawInvoices.find(i => i.id === invoiceId);
     setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
     toast({ title: 'Category assigned' });
-    // Upsert vendor mapping for future auto-assignment
     if (inv?.vendor_name) {
       supabase.from('vendor_mappings').upsert(
         { user_id: user!.id, vendor_name: inv.vendor_name, project_id: inv.project_id, category_id: categoryId, updated_at: new Date().toISOString() },
         { onConflict: 'user_id,vendor_name' }
       ).then();
     }
+  };
+
+  const unassignCategory = async (invoiceId: string) => {
+    const { error } = await supabase.from('invoices').update({ category_id: null }).eq('id', invoiceId);
+    if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: null, category: null } as any : i));
+    toast({ title: 'Category removed' });
+  };
+
+  const unassignProject = async (invoiceId: string) => {
+    const { error } = await supabase.from('invoices').update({ project_id: null }).eq('id', invoiceId);
+    if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, project_id: null, project: null } as any : i));
+    toast({ title: 'Project removed' });
   };
 
   const exportCsv = () => {
@@ -294,20 +307,26 @@ const Invoices = () => {
                         )}
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                        <Select value={inv.category_id ?? ''} onValueChange={(v) => assignCategory(inv.id, v)}>
+                        <Select value={inv.category_id ?? 'unassigned'} onValueChange={(v) => v === 'unassigned' ? unassignCategory(inv.id) : assignCategory(inv.id, v)}>
                           <SelectTrigger className="h-7 w-36 text-xs border-dashed justify-between text-left">
                             <SelectValue placeholder="Assign" />
                           </SelectTrigger>
-                          <SelectContent position="popper" sideOffset={4}>{categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                          <SelectContent position="popper" sideOffset={4}>
+                            <SelectItem value="unassigned" className="text-muted-foreground">Unassigned</SelectItem>
+                            {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                          </SelectContent>
                         </Select>
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5">
-                          <Select value={inv.project_id ?? ''} onValueChange={(v) => assignProject(inv.id, v)}>
+                          <Select value={inv.project_id ?? 'unassigned'} onValueChange={(v) => v === 'unassigned' ? unassignProject(inv.id) : assignProject(inv.id, v)}>
                             <SelectTrigger className="h-7 w-36 text-xs border-dashed justify-between text-left">
                               <SelectValue placeholder="Assign" />
                             </SelectTrigger>
-                            <SelectContent position="popper" sideOffset={4}>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                            <SelectContent position="popper" sideOffset={4}>
+                              <SelectItem value="unassigned" className="text-muted-foreground">Unassigned</SelectItem>
+                              {projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                            </SelectContent>
                           </Select>
                           {isArchived && <Archive className="h-3 w-3 text-muted-foreground/60" />}
                         </div>

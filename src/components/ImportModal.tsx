@@ -238,10 +238,11 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
   // ── Save edits to invoice ──────────────────────────────────────────────────
 
   const handleSaveInvoice = async () => {
-    if (!invoiceData?.id) return;
+    if (!invoiceData || !user) return;
     setSaving(true);
     try {
-      const updates: Record<string, any> = {
+      const record: Record<string, any> = {
+        user_id: user.id,
         vendor_name: editFields.vendor_name || null,
         invoice_number: editFields.invoice_number || null,
         invoice_date: editFields.invoice_date || null,
@@ -253,12 +254,28 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
         description: editFields.description || null,
         project_id: editFields.project_id || null,
         category_id: editFields.category_id || null,
+        document_path: invoiceData.storagePath ?? invoiceData.document_path ?? null,
+        document_hash: invoiceData.document_hash ?? null,
+        line_items: invoiceData.line_items ?? null,
+        payment_status: 'unpaid',
       };
-      const { error } = await supabase
-        .from('invoices')
-        .update(updates)
-        .eq('id', invoiceData.id);
+      const { error } = await supabase.from('invoices').insert(record);
       if (error) throw new Error(error.message);
+
+      // Upsert vendor mapping for future auto-assignment
+      if (record.vendor_name && (record.project_id || record.category_id)) {
+        await supabase.from('vendor_mappings').upsert(
+          {
+            user_id: user.id,
+            vendor_name: record.vendor_name,
+            project_id: record.project_id,
+            category_id: record.category_id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,vendor_name' }
+        );
+      }
+
       onImported();
       advanceOrClose(queue, queueIdx, 'Invoice saved.');
     } catch (e: any) {

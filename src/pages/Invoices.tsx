@@ -132,7 +132,7 @@ const Invoices = () => {
     // Upsert vendor mapping for future auto-assignment
     if (inv?.vendor_name) {
       supabase.from('vendor_mappings').upsert(
-        { user_id: inv.user_id, vendor_name: inv.vendor_name, project_id: projectId, category_id: inv.category_id, updated_at: new Date().toISOString() },
+        { user_id: user!.id, vendor_name: inv.vendor_name, project_id: projectId, category_id: inv.category_id, updated_at: new Date().toISOString() },
         { onConflict: 'user_id,vendor_name' }
       ).then();
     }
@@ -148,7 +148,7 @@ const Invoices = () => {
     // Upsert vendor mapping for future auto-assignment
     if (inv?.vendor_name) {
       supabase.from('vendor_mappings').upsert(
-        { user_id: inv.user_id, vendor_name: inv.vendor_name, project_id: inv.project_id, category_id: categoryId, updated_at: new Date().toISOString() },
+        { user_id: user!.id, vendor_name: inv.vendor_name, project_id: inv.project_id, category_id: categoryId, updated_at: new Date().toISOString() },
         { onConflict: 'user_id,vendor_name' }
       ).then();
     }

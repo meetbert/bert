@@ -95,7 +95,7 @@ const Dashboard = () => {
 
   // Filtered invoice list based on KPI click
   const getFilteredInvoices = () => {
-    if (kpiFilter === 'unpaid') return unpaid;
+    if (kpiFilter === 'unpaid') return outstanding;
     if (kpiFilter === 'overdue') return overdue;
     if (kpiFilter === 'dueThisWeek') return dueThisWeek;
 
@@ -148,8 +148,8 @@ const Dashboard = () => {
               <CardContent className="flex items-center gap-3 p-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary"><Clock className="h-5 w-5 text-muted-foreground" /></div>
                 <div className="min-w-0">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Outstanding ({unpaid.length})</p>
-                  <p className="text-xl font-bold truncate">{formatCurrency(totalUnpaid, baseCurrency)}</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Outstanding ({outstanding.length})</p>
+                  <p className="text-xl font-bold truncate">{formatCurrency(totalOutstanding, baseCurrency)}</p>
                 </div>
               </CardContent>
             </Card>

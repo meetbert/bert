@@ -179,7 +179,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
     extractFile(prepared, 0);
   };
 
-  // ── Process file (full agent: extract + create + auto-assign) ───────────────
+  // ── Extract file (single LLM call + vendor lookup) ─────────────────────────
 
   const extractFile = async (files: File[], idx: number) => {
     const file = files[idx];
@@ -195,53 +195,41 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
         .upload(storagePath, file, { upsert: true });
       if (uploadErr) throw new Error(`Upload failed: ${uploadErr.message}`);
 
-      // Run full invoice agent
-      const resp = await fetch(`${BACKEND}/api/extract/process`, {
+      // Single LLM call for extraction + deterministic vendor lookup
+      const resp = await fetch(`${BACKEND}/api/extract`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({ attachment_path: storagePath }),
       });
       const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail ?? 'Processing failed');
+      if (!resp.ok) throw new Error(data.detail ?? 'Extraction failed');
 
-      if (data.invoice_id) {
-        // Fetch the created invoice to show in review form
-        const { data: invoice } = await supabase
-          .from('invoices')
-          .select('*')
-          .eq('id', data.invoice_id)
-          .single();
-
-        if (invoice) {
-          setInvoiceData(invoice);
-          setEditFields({
-            vendor_name: invoice.vendor_name ?? '',
-            invoice_number: invoice.invoice_number ?? '',
-            invoice_date: invoice.invoice_date ?? '',
-            due_date: invoice.due_date ?? '',
-            currency: invoice.currency ?? '',
-            subtotal: invoice.subtotal ?? '',
-            vat: invoice.vat ?? '',
-            total: invoice.total ?? '',
-            description: invoice.description ?? '',
-            project_id: invoice.project_id ?? '',
-            category_id: invoice.category_id ?? '',
-          });
-          onImported();
-        } else {
-          toast({ title: 'Invoice created but could not load details.' });
-          onImported();
-          advanceOrClose(files, idx);
-        }
-      } else {
+      if (data.error || data.not_invoice) {
         toast({
           title: 'Skipped',
-          description: data.summary ?? 'No invoice was created from this file.',
+          description: data.error ?? 'This file does not appear to be an invoice.',
         });
         advanceOrClose(files, idx);
+        return;
       }
+
+      // Show review form with extracted data + vendor-mapped suggestions
+      setInvoiceData({ storagePath, ...data });
+      setEditFields({
+        vendor_name: data.vendor_name ?? '',
+        invoice_number: data.invoice_number ?? '',
+        invoice_date: data.invoice_date ?? '',
+        due_date: data.due_date ?? '',
+        currency: data.currency ?? '',
+        subtotal: data.subtotal ?? '',
+        vat: data.vat ?? '',
+        total: data.total ?? '',
+        description: data.description ?? '',
+        project_id: data.suggested_project_id ?? '',
+        category_id: data.suggested_category_id ?? '',
+      });
     } catch (e: any) {
-      toast({ title: 'Processing failed', description: e.message, variant: 'destructive' });
+      toast({ title: 'Extraction failed', description: e.message, variant: 'destructive' });
     } finally {
       setExtracting(false);
     }

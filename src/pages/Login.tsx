@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { resolvePostAuthRoute } from '@/lib/authRouting';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,21 +19,16 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      // Check onboarding
-      supabase
-        .from('user_settings')
-        .select('onboarding_done')
-        .eq('id', user.id)
-        .single()
-        .then(({ data }) => {
-          if (!data || !data.onboarding_done) {
-            navigate('/onboarding', { replace: true });
-          } else {
-            navigate('/dashboard', { replace: true });
-          }
-        });
-    }
+    if (!user) return;
+
+    supabase
+      .from('user_settings')
+      .select('onboarding_done')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        navigate(resolvePostAuthRoute(user, data), { replace: true });
+      });
   }, [user, navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {

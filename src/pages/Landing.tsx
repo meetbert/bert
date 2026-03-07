@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/Navbar';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { resolvePostAuthRoute } from '@/lib/authRouting';
 import { FileText, BarChart3, AlertTriangle } from 'lucide-react';
 
 const features = [
@@ -27,17 +28,14 @@ const Landing = () => {
 
   useEffect(() => {
     if (loading || !user) return;
+
     supabase
       .from('user_settings')
       .select('onboarding_done')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
-        if (data?.onboarding_done) {
-          navigate('/dashboard', { replace: true });
-        } else {
-          navigate('/onboarding', { replace: true });
-        }
+        navigate(resolvePostAuthRoute(user, data), { replace: true });
       });
   }, [user, loading, navigate]);
 

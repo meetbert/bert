@@ -282,19 +282,6 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
     onClose();
   };
 
-  // ── Editable field helper ──────────────────────────────────────────────────
-
-  const field = (key: string, label: string) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input
-        value={editFields[key] ?? ''}
-        onChange={(e) => setEditFields({ ...editFields, [key]: e.target.value })}
-        className="h-8 text-sm"
-      />
-    </div>
-  );
-
   // ── Drop zone content ──────────────────────────────────────────────────────
 
   const dropZoneContent = () => {

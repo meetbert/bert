@@ -162,7 +162,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
     extractFile(prepared, 0);
   };
 
-  // ── Extraction ─────────────────────────────────────────────────────────────
+  // ── Process file (full agent: extract + create + auto-assign) ───────────────
 
   const extractFile = async (files: File[], idx: number) => {
     const file = files[idx];
@@ -178,19 +178,27 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
         .upload(storagePath, file, { upsert: true });
       if (uploadErr) throw new Error(`Upload failed: ${uploadErr.message}`);
 
-      const resp = await fetch(`${BACKEND}/api/extract`, {
+      // Run full invoice agent — it extracts, deduplicates, creates, and auto-assigns
+      const resp = await fetch(`${BACKEND}/api/extract/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({ attachment_path: storagePath }),
       });
       const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail ?? 'Extraction failed');
-      if (data.not_invoice) throw new Error('This file does not appear to be an invoice.');
+      if (!resp.ok) throw new Error(data.detail ?? 'Processing failed');
 
-      setExtracted({ ...data, document_path: storagePath });
-      setEditFields({ ...data, document_path: storagePath });
+      if (data.invoice_id) {
+        onImported();
+        advanceOrClose(files, idx, data.summary ?? 'Invoice processed.');
+      } else {
+        toast({
+          title: 'Skipped',
+          description: data.summary ?? 'No invoice was created from this file.',
+        });
+        advanceOrClose(files, idx);
+      }
     } catch (e: any) {
-      toast({ title: 'Extraction failed', description: e.message, variant: 'destructive' });
+      toast({ title: 'Processing failed', description: e.message, variant: 'destructive' });
     } finally {
       setExtracting(false);
     }

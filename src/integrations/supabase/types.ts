@@ -369,6 +369,51 @@ export type Database = {
         }
         Relationships: []
       }
+      vendor_mappings: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          id: string
+          project_id: string | null
+          updated_at: string | null
+          user_id: string
+          vendor_name: string
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          project_id?: string | null
+          updated_at?: string | null
+          user_id: string
+          vendor_name: string
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          project_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+          vendor_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_mappings_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_mappings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

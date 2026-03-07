@@ -204,7 +204,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
     }
   };
 
-  const handleSkip = () => advanceOrClose(queue, queueIdx);
+  const advanceOrClose = (files: File[], idx: number, savedMsg?: string) => {
     const nextIdx = idx + 1;
     if (nextIdx < files.length) {
       if (savedMsg) toast({ title: `File ${idx + 1} of ${files.length} done`, description: `Processing next file…` });

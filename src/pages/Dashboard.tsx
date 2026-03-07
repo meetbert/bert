@@ -226,7 +226,7 @@ const Dashboard = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-sm">Monthly Spend</CardTitle>
               <Select value={timeRange} onValueChange={setTimeRange}>
-                <SelectTrigger className="h-8 w-[110px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 w-[120px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="3m">3 months</SelectItem>
                   <SelectItem value="6m">6 months</SelectItem>

@@ -3,8 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
@@ -122,7 +120,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
   const [extracting, setExtracting] = useState(false);
   const [extracted, setExtracted] = useState<Record<string, any> | null>(null);
   const [editFields, setEditFields] = useState<Record<string, any>>({});
-  const [inserting, setInserting] = useState(false);
+  
 
   // ── CSV state ──────────────────────────────────────────────────────────────
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
@@ -162,7 +160,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
     extractFile(prepared, 0);
   };
 
-  // ── Extraction ─────────────────────────────────────────────────────────────
+  // ── Process file (full agent: extract + create + auto-assign) ───────────────
 
   const extractFile = async (files: File[], idx: number) => {
     const file = files[idx];
@@ -178,57 +176,29 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
         .upload(storagePath, file, { upsert: true });
       if (uploadErr) throw new Error(`Upload failed: ${uploadErr.message}`);
 
-      const resp = await fetch(`${BACKEND}/api/extract`, {
+      // Run full invoice agent — it extracts, deduplicates, creates, and auto-assigns
+      const resp = await fetch(`${BACKEND}/api/extract/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({ attachment_path: storagePath }),
       });
       const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail ?? 'Extraction failed');
-      if (data.not_invoice) throw new Error('This file does not appear to be an invoice.');
+      if (!resp.ok) throw new Error(data.detail ?? 'Processing failed');
 
-      setExtracted({ ...data, document_path: storagePath });
-      setEditFields({ ...data, document_path: storagePath });
+      if (data.invoice_id) {
+        onImported();
+        advanceOrClose(files, idx, data.summary ?? 'Invoice processed.');
+      } else {
+        toast({
+          title: 'Skipped',
+          description: data.summary ?? 'No invoice was created from this file.',
+        });
+        advanceOrClose(files, idx);
+      }
     } catch (e: any) {
-      toast({ title: 'Extraction failed', description: e.message, variant: 'destructive' });
+      toast({ title: 'Processing failed', description: e.message, variant: 'destructive' });
     } finally {
       setExtracting(false);
-    }
-  };
-
-  // ── Save & advance ─────────────────────────────────────────────────────────
-
-  const handleConfirmInsert = async () => {
-    if (!user) return;
-    setInserting(true);
-
-    try {
-      const { error } = await supabase.from('invoices').insert({
-        user_id: user.id,
-        vendor_name: editFields.vendor_name || null,
-        invoice_date: editFields.invoice_date || null,
-        invoice_number: editFields.invoice_number || null,
-        currency: editFields.currency || null,
-        subtotal: editFields.subtotal ? Number(editFields.subtotal) : null,
-        vat: editFields.vat ? Number(editFields.vat) : null,
-        total: editFields.total ? Number(editFields.total) : null,
-        due_date: editFields.due_date || null,
-        description: editFields.description || null,
-        line_items: editFields.line_items || null,
-        document_path: editFields.document_path || null,
-        document_hash: editFields.document_hash || null,
-        project_id: projectId ?? null,
-        payment_status: 'unpaid',
-        processing_status: 'complete',
-      });
-      if (error) throw new Error(error.message);
-
-      onImported();
-      advanceOrClose(queue, queueIdx, `${editFields.vendor_name ?? 'Invoice'} saved.`);
-    } catch (e: any) {
-      toast({ title: 'Insert failed', description: e.message, variant: 'destructive' });
-    } finally {
-      setInserting(false);
     }
   };
 
@@ -309,19 +279,6 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
     setCsvHeaders([]); setCsvRows([]); setCsvMapping({}); setCsvInserted(null);
     onClose();
   };
-
-  // ── Editable field helper ──────────────────────────────────────────────────
-
-  const field = (key: string, label: string) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input
-        value={editFields[key] ?? ''}
-        onChange={(e) => setEditFields({ ...editFields, [key]: e.target.value })}
-        className="h-8 text-sm"
-      />
-    </div>
-  );
 
   // ── Drop zone content ──────────────────────────────────────────────────────
 
@@ -418,47 +375,13 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
               </p>
             )}
 
-            {/* Extracting state */}
+            {/* Processing state */}
             {extracting && (
-              <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Extracting invoice data…
+              <div className="flex flex-col items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <p className="font-medium">Processing invoice…</p>
+                <p className="text-xs">Extracting data, checking duplicates, and auto-assigning project & category.</p>
               </div>
-            )}
-
-            {/* Review form */}
-            {!extracting && extracted && (
-              <>
-                <div className="grid grid-cols-2 gap-3 rounded-lg border p-4">
-                  {field('vendor_name', 'Vendor')}
-                  {field('invoice_number', 'Invoice #')}
-                  {field('invoice_date', 'Date')}
-                  {field('due_date', 'Due Date')}
-                  {field('currency', 'Currency')}
-                  {field('subtotal', 'Subtotal')}
-                  {field('vat', 'VAT')}
-                  {field('total', 'Total')}
-                  <div className="col-span-2">{field('description', 'Description')}</div>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button onClick={handleConfirmInsert} disabled={inserting} className="flex-1">
-                    {inserting
-                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>
-                      : queue.length > 1
-                        ? `Save & Next (${queueIdx + 1}/${queue.length})`
-                        : 'Save Invoice'}
-                  </Button>
-                  {queue.length > 1 && (
-                    <Button variant="outline" onClick={handleSkip} disabled={inserting}>
-                      Skip
-                    </Button>
-                  )}
-                  <Button variant="outline" onClick={() => { setQueue([]); setQueueIdx(0); setExtracted(null); setEditFields({}); }} disabled={inserting}>
-                    Clear
-                  </Button>
-                </div>
-              </>
             )}
 
             {/* Empty state — no file yet */}

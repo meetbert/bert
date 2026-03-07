@@ -122,7 +122,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
   const [extracting, setExtracting] = useState(false);
   const [extracted, setExtracted] = useState<Record<string, any> | null>(null);
   const [editFields, setEditFields] = useState<Record<string, any>>({});
-  const [inserting, setInserting] = useState(false);
+  
 
   // ── CSV state ──────────────────────────────────────────────────────────────
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);

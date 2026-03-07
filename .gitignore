@@ -23,7 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Google OAuth credentials — never commit these
+# Google OAuth credentials
 client_secret*.json
 *.credentials.json
 token.json

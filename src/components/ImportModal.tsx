@@ -390,47 +390,13 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
               </p>
             )}
 
-            {/* Extracting state */}
+            {/* Processing state */}
             {extracting && (
-              <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Extracting invoice data…
+              <div className="flex flex-col items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <p className="font-medium">Processing invoice…</p>
+                <p className="text-xs">Extracting data, checking duplicates, and auto-assigning project & category.</p>
               </div>
-            )}
-
-            {/* Review form */}
-            {!extracting && extracted && (
-              <>
-                <div className="grid grid-cols-2 gap-3 rounded-lg border p-4">
-                  {field('vendor_name', 'Vendor')}
-                  {field('invoice_number', 'Invoice #')}
-                  {field('invoice_date', 'Date')}
-                  {field('due_date', 'Due Date')}
-                  {field('currency', 'Currency')}
-                  {field('subtotal', 'Subtotal')}
-                  {field('vat', 'VAT')}
-                  {field('total', 'Total')}
-                  <div className="col-span-2">{field('description', 'Description')}</div>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button onClick={handleConfirmInsert} disabled={inserting} className="flex-1">
-                    {inserting
-                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>
-                      : queue.length > 1
-                        ? `Save & Next (${queueIdx + 1}/${queue.length})`
-                        : 'Save Invoice'}
-                  </Button>
-                  {queue.length > 1 && (
-                    <Button variant="outline" onClick={handleSkip} disabled={inserting}>
-                      Skip
-                    </Button>
-                  )}
-                  <Button variant="outline" onClick={() => { setQueue([]); setQueueIdx(0); setExtracted(null); setEditFields({}); }} disabled={inserting}>
-                    Clear
-                  </Button>
-                </div>
-              </>
             )}
 
             {/* Empty state — no file yet */}

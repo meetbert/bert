@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
@@ -118,9 +119,13 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
 
   // ── Per-file extraction state ──────────────────────────────────────────────
   const [extracting, setExtracting] = useState(false);
-  const [extracted, setExtracted] = useState<Record<string, any> | null>(null);
+  const [invoiceData, setInvoiceData] = useState<Record<string, any> | null>(null);
   const [editFields, setEditFields] = useState<Record<string, any>>({});
-  
+  const [saving, setSaving] = useState(false);
+
+  // ── Reference data ────────────────────────────────────────────────────────
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
 
   // ── CSV state ──────────────────────────────────────────────────────────────
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
@@ -132,6 +137,20 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
   const authHeader = () =>
     session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
+  // ── Load projects & categories ────────────────────────────────────────────
+  useEffect(() => {
+    if (!open || !user) return;
+    const load = async () => {
+      const [{ data: p }, { data: c }] = await Promise.all([
+        supabase.from('projects').select('id, name').eq('user_id', user.id).eq('status', 'Active'),
+        supabase.from('invoice_categories').select('id, name'),
+      ]);
+      setProjects(p ?? []);
+      setCategories(c ?? []);
+    };
+    load();
+  }, [open, user]);
+
   // ── File intake (drag-drop or click) ──────────────────────────────────────
 
   const handleFiles = async (rawFiles: FileList | File[]) => {
@@ -139,7 +158,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
     if (!files.length) return;
 
     setConverting(true);
-    setExtracted(null);
+    setInvoiceData(null);
     setEditFields({});
 
     let prepared: File[] = [];
@@ -166,7 +185,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
     const file = files[idx];
     if (!file || !user) return;
     setExtracting(true);
-    setExtracted(null);
+    setInvoiceData(null);
     setEditFields({});
 
     try {
@@ -176,7 +195,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
         .upload(storagePath, file, { upsert: true });
       if (uploadErr) throw new Error(`Upload failed: ${uploadErr.message}`);
 
-      // Run full invoice agent — it extracts, deduplicates, creates, and auto-assigns
+      // Run full invoice agent
       const resp = await fetch(`${BACKEND}/api/extract/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader() },
@@ -186,8 +205,34 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
       if (!resp.ok) throw new Error(data.detail ?? 'Processing failed');
 
       if (data.invoice_id) {
-        onImported();
-        advanceOrClose(files, idx, data.summary ?? 'Invoice processed.');
+        // Fetch the created invoice to show in review form
+        const { data: invoice } = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('id', data.invoice_id)
+          .single();
+
+        if (invoice) {
+          setInvoiceData(invoice);
+          setEditFields({
+            vendor_name: invoice.vendor_name ?? '',
+            invoice_number: invoice.invoice_number ?? '',
+            invoice_date: invoice.invoice_date ?? '',
+            due_date: invoice.due_date ?? '',
+            currency: invoice.currency ?? '',
+            subtotal: invoice.subtotal ?? '',
+            vat: invoice.vat ?? '',
+            total: invoice.total ?? '',
+            description: invoice.description ?? '',
+            project_id: invoice.project_id ?? '',
+            category_id: invoice.category_id ?? '',
+          });
+          onImported();
+        } else {
+          toast({ title: 'Invoice created but could not load details.' });
+          onImported();
+          advanceOrClose(files, idx);
+        }
       } else {
         toast({
           title: 'Skipped',
@@ -202,19 +247,54 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
     }
   };
 
-  const advanceOrClose = (files: File[], idx: number, savedMsg?: string) => {
+  // ── Save edits to invoice ──────────────────────────────────────────────────
+
+  const handleSaveInvoice = async () => {
+    if (!invoiceData?.id) return;
+    setSaving(true);
+    try {
+      const updates: Record<string, any> = {
+        vendor_name: editFields.vendor_name || null,
+        invoice_number: editFields.invoice_number || null,
+        invoice_date: editFields.invoice_date || null,
+        due_date: editFields.due_date || null,
+        currency: editFields.currency || null,
+        subtotal: editFields.subtotal ? Number(editFields.subtotal) : null,
+        vat: editFields.vat ? Number(editFields.vat) : null,
+        total: editFields.total ? Number(editFields.total) : null,
+        description: editFields.description || null,
+        project_id: editFields.project_id || null,
+        category_id: editFields.category_id || null,
+      };
+      const { error } = await supabase
+        .from('invoices')
+        .update(updates)
+        .eq('id', invoiceData.id);
+      if (error) throw new Error(error.message);
+      onImported();
+      advanceOrClose(queue, queueIdx, 'Invoice saved.');
+    } catch (e: any) {
+      toast({ title: 'Save failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const advanceOrClose = (files: File[], idx: number, _savedMsg?: string) => {
     const nextIdx = idx + 1;
     if (nextIdx < files.length) {
-      if (savedMsg) toast({ title: `File ${idx + 1} of ${files.length} done`, description: `Processing next file…` });
       setQueueIdx(nextIdx);
       extractFile(files, nextIdx);
     } else {
-      if (savedMsg) toast({ title: 'All done', description: savedMsg });
       handleClose();
     }
   };
 
-  const handleSkip = () => advanceOrClose(queue, queueIdx);
+  const handleSkip = () => {
+    setInvoiceData(null);
+    setEditFields({});
+    advanceOrClose(queue, queueIdx);
+  };
 
   // ── Drag & drop ────────────────────────────────────────────────────────────
 
@@ -275,10 +355,23 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
 
   const handleClose = () => {
     setQueue([]); setQueueIdx(0);
-    setExtracted(null); setEditFields({});
+    setInvoiceData(null); setEditFields({});
     setCsvHeaders([]); setCsvRows([]); setCsvMapping({}); setCsvInserted(null);
     onClose();
   };
+
+  // ── Field helper ───────────────────────────────────────────────────────────
+
+  const field = (key: string, label: string, halfWidth = false) => (
+    <div className={halfWidth ? 'flex-1 min-w-0' : 'w-full'}>
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      <Input
+        value={editFields[key] ?? ''}
+        onChange={(e) => setEditFields({ ...editFields, [key]: e.target.value })}
+        className="mt-1"
+      />
+    </div>
+  );
 
   // ── Drop zone content ──────────────────────────────────────────────────────
 
@@ -290,7 +383,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
       </>
     );
 
-    if (queue.length > 0) return (
+    if (queue.length > 0 && !invoiceData) return (
       <>
         <FileText className="h-8 w-8 text-primary" />
         <p className="text-sm font-medium">
@@ -346,30 +439,32 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
               Upload PDFs or images — we'll extract the details automatically. Drop multiple files to process them in sequence.
             </p>
 
-            {/* Drop zone */}
-            <label
-              htmlFor="pdf-upload"
-              className={cn(
-                'flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-8 transition-colors',
-                isDragging ? 'border-primary bg-primary/5' : 'hover:bg-secondary/40',
-              )}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onDrop={onDrop}
-            >
-              {dropZoneContent()}
-              <input
-                id="pdf-upload"
-                type="file"
-                accept={ACCEPTED_EXTS}
-                multiple
-                className="hidden"
-                onChange={(e) => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ''; }}
-              />
-            </label>
+            {/* Drop zone — hide when showing review form */}
+            {!invoiceData && (
+              <label
+                htmlFor="pdf-upload"
+                className={cn(
+                  'flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-8 transition-colors',
+                  isDragging ? 'border-primary bg-primary/5' : 'hover:bg-secondary/40',
+                )}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+              >
+                {dropZoneContent()}
+                <input
+                  id="pdf-upload"
+                  type="file"
+                  accept={ACCEPTED_EXTS}
+                  multiple
+                  className="hidden"
+                  onChange={(e) => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ''; }}
+                />
+              </label>
+            )}
 
             {/* Progress indicator */}
-            {queue.length > 1 && (
+            {queue.length > 1 && !invoiceData && (
               <p className="text-center text-xs text-muted-foreground">
                 File {queueIdx + 1} of {queue.length}
               </p>
@@ -384,8 +479,88 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
               </div>
             )}
 
+            {/* ── Review form ──────────────────────────────────── */}
+            {invoiceData && !extracting && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-green-600">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Invoice processed — review & confirm details
+                </div>
+
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="flex gap-3">
+                    {field('vendor_name', 'Vendor', true)}
+                    {field('invoice_number', 'Invoice #', true)}
+                  </div>
+                  <div className="flex gap-3">
+                    {field('invoice_date', 'Date', true)}
+                    {field('due_date', 'Due Date', true)}
+                  </div>
+                  <div className="flex gap-3">
+                    {field('currency', 'Currency', true)}
+                    {field('subtotal', 'Subtotal', true)}
+                  </div>
+                  <div className="flex gap-3">
+                    {field('vat', 'VAT', true)}
+                    {field('total', 'Total', true)}
+                  </div>
+                  {field('description', 'Description')}
+
+                  {/* Project assignment */}
+                  <div className="flex gap-3">
+                    <div className="flex-1 min-w-0">
+                      <label className="text-xs font-medium text-muted-foreground">Project</label>
+                      <Select
+                        value={editFields.project_id ?? ''}
+                        onValueChange={(v) => setEditFields({ ...editFields, project_id: v === '_none' ? '' : v })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Unassigned" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">Unassigned</SelectItem>
+                          {projects.map(p => (
+                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <label className="text-xs font-medium text-muted-foreground">Category</label>
+                      <Select
+                        value={editFields.category_id ?? ''}
+                        onValueChange={(v) => setEditFields({ ...editFields, category_id: v === '_none' ? '' : v })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Unassigned" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">Unassigned</SelectItem>
+                          {categories.map(c => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveInvoice} disabled={saving} className="flex-1">
+                    {saving
+                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>
+                      : 'Save Invoice'}
+                  </Button>
+                  {queue.length > 1 && (
+                    <Button variant="outline" onClick={handleSkip}>Skip</Button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Empty state — no file yet */}
-            {!extracting && !extracted && queue.length === 0 && !converting && (
+            {!extracting && !invoiceData && queue.length === 0 && !converting && (
               <p className="text-center text-xs text-muted-foreground py-2">
                 No file selected yet.
               </p>

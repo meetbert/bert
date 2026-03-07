@@ -479,8 +479,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
             {extracting && (
               <div className="flex flex-col items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                <p className="font-medium">Processing invoice…</p>
-                <p className="text-xs">Extracting data, checking duplicates, and auto-assigning project & category.</p>
+                <p className="font-medium">Extracting invoice data…</p>
               </div>
             )}
 

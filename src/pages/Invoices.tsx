@@ -124,16 +124,32 @@ const Invoices = () => {
     const { error } = await supabase.from('invoices').update({ project_id: projectId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     const proj = projects.find(p => p.id === projectId);
+    const inv = rawInvoices.find(i => i.id === invoiceId);
     setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, project_id: projectId, project: proj ?? null } as any : i));
     toast({ title: 'Project assigned' });
+    // Upsert vendor mapping for future auto-assignment
+    if (inv?.vendor_name) {
+      supabase.from('vendor_mappings').upsert(
+        { user_id: inv.user_id, vendor_name: inv.vendor_name, project_id: projectId, category_id: inv.category_id, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id,vendor_name' }
+      ).then();
+    }
   };
 
   const assignCategory = async (invoiceId: string, categoryId: string) => {
     const { error } = await supabase.from('invoices').update({ category_id: categoryId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     const cat = categories.find(c => c.id === categoryId);
+    const inv = rawInvoices.find(i => i.id === invoiceId);
     setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
     toast({ title: 'Category assigned' });
+    // Upsert vendor mapping for future auto-assignment
+    if (inv?.vendor_name) {
+      supabase.from('vendor_mappings').upsert(
+        { user_id: inv.user_id, vendor_name: inv.vendor_name, project_id: inv.project_id, category_id: categoryId, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id,vendor_name' }
+      ).then();
+    }
   };
 
   const exportCsv = () => {

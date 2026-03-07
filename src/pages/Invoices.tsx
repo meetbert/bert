@@ -23,6 +23,7 @@ import { useDemoData } from '@/contexts/DemoDataContext';
 const PAGE_SIZE = 25;
 
 const Invoices = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [showImport, setShowImport] = useState(false);
   const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);

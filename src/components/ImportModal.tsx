@@ -204,43 +204,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
     }
   };
 
-  // ── Save & advance ─────────────────────────────────────────────────────────
-
-  const handleConfirmInsert = async () => {
-    if (!user) return;
-    setInserting(true);
-
-    try {
-      const { error } = await supabase.from('invoices').insert({
-        user_id: user.id,
-        vendor_name: editFields.vendor_name || null,
-        invoice_date: editFields.invoice_date || null,
-        invoice_number: editFields.invoice_number || null,
-        currency: editFields.currency || null,
-        subtotal: editFields.subtotal ? Number(editFields.subtotal) : null,
-        vat: editFields.vat ? Number(editFields.vat) : null,
-        total: editFields.total ? Number(editFields.total) : null,
-        due_date: editFields.due_date || null,
-        description: editFields.description || null,
-        line_items: editFields.line_items || null,
-        document_path: editFields.document_path || null,
-        document_hash: editFields.document_hash || null,
-        project_id: projectId ?? null,
-        payment_status: 'unpaid',
-        processing_status: 'complete',
-      });
-      if (error) throw new Error(error.message);
-
-      onImported();
-      advanceOrClose(queue, queueIdx, `${editFields.vendor_name ?? 'Invoice'} saved.`);
-    } catch (e: any) {
-      toast({ title: 'Insert failed', description: e.message, variant: 'destructive' });
-    } finally {
-      setInserting(false);
-    }
-  };
-
-  const advanceOrClose = (files: File[], idx: number, savedMsg?: string) => {
+  const handleSkip = () => advanceOrClose(queue, queueIdx);
     const nextIdx = idx + 1;
     if (nextIdx < files.length) {
       if (savedMsg) toast({ title: `File ${idx + 1} of ${files.length} done`, description: `Processing next file…` });

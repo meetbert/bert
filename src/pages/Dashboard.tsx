@@ -58,9 +58,9 @@ const Dashboard = () => {
   const projectCategories = useMemo(() => isDemoMode ? [...demoProjectCategories, ...rawProjectCategories] : rawProjectCategories, [isDemoMode, demoProjectCategories, rawProjectCategories]);
 
   const activeProjects = projects.filter((p) => p.status === 'Active');
-  const unpaid = invoices.filter((i) => i.payment_status === 'unpaid');
   const overdue = invoices.filter((i) => i.payment_status === 'overdue');
-  const totalUnpaid = unpaid.reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
+  const outstanding = invoices.filter((i) => i.payment_status === 'unpaid' || i.payment_status === 'overdue');
+  const totalOutstanding = outstanding.reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
   const totalOverdue = overdue.reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
 
   const now = new Date();

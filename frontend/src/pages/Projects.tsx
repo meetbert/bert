@@ -25,7 +25,7 @@ const Projects = () => {
   const { isDemoMode, demoProjects, demoInvoices } = useDemoData();
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [filterTab, setFilterTab] = useState<'all' | 'Active' | 'Completed' | 'Archived'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'Active' | 'Completed'>('all');
 
   const fetchData = async () => {
     const [p, i] = await Promise.all([

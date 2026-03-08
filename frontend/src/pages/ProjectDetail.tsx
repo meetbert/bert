@@ -6,6 +6,7 @@ import { Navbar } from '@/components/Navbar';
 import { KpiCard } from '@/components/KpiCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatusDropdown } from '@/components/StatusDropdown';
+import { ProjectStatusDropdown } from '@/components/ProjectStatusDropdown';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -142,7 +143,12 @@ const ProjectDetail = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold truncate max-w-md lg:max-w-xl">{project.name}</h1>
-            <StatusBadge status={project.status} />
+            <ProjectStatusDropdown status={project.status ?? 'Active'} onChangeStatus={async (s) => {
+              const { error } = await supabase.from('projects').update({ status: s }).eq('id', id!);
+              if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
+              setProject((prev) => prev ? { ...prev, status: s } : prev);
+              toast({ title: `Status changed to ${s}` });
+            }} />
           </div>
           <div className="flex gap-1">
             <Button variant="ghost" size="icon" onClick={() => setShowEditDialog(true)}>

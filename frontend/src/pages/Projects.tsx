@@ -151,10 +151,10 @@ const Projects = () => {
               </div>
             )}
 
-            {/* Completed / Archive section */}
+            {/* Completed section */}
             {completedProjects.length > 0 && (
               <div>
-                {filterTab === 'all' && <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-muted-foreground">Archive</h2>}
+                {filterTab === 'all' && <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-muted-foreground">Completed</h2>}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {completedProjects.map(renderProjectCard)}
                 </div>

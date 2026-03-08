@@ -23,8 +23,6 @@ export const ChatButton = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  if (!user) return null;
-
   // Load chat history from Supabase on first open
   useEffect(() => {
     if (!open || historyLoaded || !session) return;

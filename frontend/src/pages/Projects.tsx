@@ -45,7 +45,7 @@ const Projects = () => {
 
   const filteredProjects = filterTab === 'all' ? projects : projects.filter((p) => p.status === filterTab);
   const activeProjects = filteredProjects.filter((p) => p.status === 'Active');
-  const completedProjects = filteredProjects.filter((p) => p.status === 'Completed' || p.status === 'Archived');
+  const completedProjects = filteredProjects.filter((p) => p.status === 'Completed');
 
   const renderProjectCard = (p: Project) => {
     const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);

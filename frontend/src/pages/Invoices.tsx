@@ -197,7 +197,7 @@ const Invoices = () => {
             ))}
           </div>
           <div className="flex gap-1 rounded-lg bg-secondary p-1">
-            {([['active', 'Active Projects'], ['all', 'All'], ['archived', 'Archived']] as const).map(([key, label]) => (
+            {([['active', 'Active Projects'], ['all', 'All'], ['archived', 'Completed']] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => { setFilterProjectScope(key); setPage(0); }}

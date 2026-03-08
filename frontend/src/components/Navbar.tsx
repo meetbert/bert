@@ -17,7 +17,6 @@ export const Navbar = () => {
         { to: '/settings', label: 'Settings' },
       ]
     : [
-        { to: '/dashboard', label: 'Dashboard' },
         { to: '/login', label: 'Login' },
       ];
 

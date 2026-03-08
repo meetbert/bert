@@ -25,7 +25,7 @@ const Projects = () => {
   const { isDemoMode, demoProjects, demoInvoices } = useDemoData();
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [filterTab, setFilterTab] = useState<'all' | 'Active' | 'Completed' | 'Archived'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'Active' | 'Completed'>('all');
 
   const fetchData = async () => {
     const [p, i] = await Promise.all([
@@ -45,7 +45,7 @@ const Projects = () => {
 
   const filteredProjects = filterTab === 'all' ? projects : projects.filter((p) => p.status === filterTab);
   const activeProjects = filteredProjects.filter((p) => p.status === 'Active');
-  const completedProjects = filteredProjects.filter((p) => p.status === 'Completed' || p.status === 'Archived');
+  const completedProjects = filteredProjects.filter((p) => p.status === 'Completed');
 
   const renderProjectCard = (p: Project) => {
     const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
@@ -115,7 +115,7 @@ const Projects = () => {
         {/* Filter tabs + Add Project */}
         <div className="flex items-center justify-between">
           <div className="inline-flex gap-1 rounded-lg bg-secondary p-1">
-            {(['all', 'Active', 'Completed', 'Archived'] as const).map((tab) => (
+            {(['all', 'Active', 'Completed'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setFilterTab(tab)}
@@ -151,10 +151,10 @@ const Projects = () => {
               </div>
             )}
 
-            {/* Completed / Archive section */}
+            {/* Completed section */}
             {completedProjects.length > 0 && (
               <div>
-                {filterTab === 'all' && <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-muted-foreground">Archive</h2>}
+                {filterTab === 'all' && <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-muted-foreground">Completed</h2>}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {completedProjects.map(renderProjectCard)}
                 </div>

@@ -115,7 +115,7 @@ const Projects = () => {
         {/* Filter tabs + Add Project */}
         <div className="flex items-center justify-between">
           <div className="inline-flex gap-1 rounded-lg bg-secondary p-1">
-            {(['all', 'Active', 'Completed', 'Archived'] as const).map((tab) => (
+            {(['all', 'Active', 'Completed'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setFilterTab(tab)}

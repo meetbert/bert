@@ -58,6 +58,8 @@ export const ChatButton = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  if (!user) return null;
+
   const clearChat = async () => {
     const userId = session?.user?.id;
     if (userId) {

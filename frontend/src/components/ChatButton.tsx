@@ -13,7 +13,7 @@ type Message = { role: 'user' | 'assistant'; text: string };
 const PANEL_WIDTH = 'sm:w-[400px]';
 
 export const ChatButton = () => {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -57,6 +57,8 @@ export const ChatButton = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  if (!user) return null;
 
   const clearChat = async () => {
     const userId = session?.user?.id;

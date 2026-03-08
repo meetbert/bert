@@ -6,6 +6,7 @@ import { Navbar } from '@/components/Navbar';
 import { KpiCard } from '@/components/KpiCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatusDropdown } from '@/components/StatusDropdown';
+import { ProjectStatusDropdown } from '@/components/ProjectStatusDropdown';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

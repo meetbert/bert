@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Project, Invoice, Category } from '@/types/database';
-import { Navbar } from '@/components/Navbar';
 import { KpiCard } from '@/components/KpiCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatusDropdown } from '@/components/StatusDropdown';
@@ -110,8 +109,8 @@ const ProjectDetail = () => {
     navigate('/projects');
   };
 
-  if (loading) return <div className="min-h-screen"><Navbar /><div className="container py-8"><div className="h-40 animate-pulse rounded-lg bg-secondary" /></div></div>;
-  if (!project) return <div className="min-h-screen"><Navbar /><div className="container py-16 text-center text-muted-foreground">Project not found</div></div>;
+  if (loading) return <div className="min-h-screen"><div className="container py-8"><div className="h-40 animate-pulse rounded-lg bg-secondary" /></div></div>;
+  if (!project) return <div className="min-h-screen"><div className="container py-16 text-center text-muted-foreground">Project not found</div></div>;
 
   const totalSpent = invoices.reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
   const remaining = project.budget - totalSpent;
@@ -143,7 +142,6 @@ const ProjectDetail = () => {
 
   return (
     <div className="min-h-screen">
-      <Navbar />
       <div className="container space-y-8 py-8">
         <Link to="/projects" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Projects</Link>
 

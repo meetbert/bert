@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
-import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -148,7 +147,6 @@ const InvoiceDetail = () => {
 
   if (loading) return (
     <div className="min-h-screen">
-      <Navbar />
       <div className="container space-y-6 py-8">
         <Skeleton className="h-5 w-24" />
         <Skeleton className="h-8 w-64" />
@@ -160,13 +158,12 @@ const InvoiceDetail = () => {
     </div>
   );
 
-  if (error) return <div className="min-h-screen"><Navbar /><div className="container py-16 text-center text-destructive">Error: {error}</div></div>;
+  if (error) return <div className="min-h-screen"><div className="container py-16 text-center text-destructive">Error: {error}</div></div>;
 
-  if (!invoice) return <div className="min-h-screen"><Navbar /><div className="container py-16 text-center text-muted-foreground">Invoice not found</div></div>;
+  if (!invoice) return <div className="min-h-screen"><div className="container py-16 text-center text-muted-foreground">Invoice not found</div></div>;
 
   return (
     <div className="min-h-screen">
-      <Navbar />
       <div className="container space-y-6 py-8">
         <Link to="/invoices" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> All Invoices</Link>
 

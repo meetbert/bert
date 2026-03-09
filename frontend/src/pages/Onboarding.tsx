@@ -4,7 +4,6 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Navbar } from '@/components/Navbar';
 import { ArrowLeft, Check, FileText, Table } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -39,7 +38,6 @@ const Onboarding = () => {
 
   return (
     <div className="min-h-screen">
-      <Navbar />
       <div className="container max-w-lg py-12">
         <Progress value={(displayStep / totalSteps) * 100} className="mb-8" />
 

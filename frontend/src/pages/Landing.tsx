@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Navbar } from '@/components/Navbar';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { resolvePostAuthRoute } from '@/lib/authRouting';
@@ -41,7 +40,6 @@ const Landing = () => {
 
   return (
     <div className="min-h-screen">
-      <Navbar />
       <main className="container flex flex-col items-center justify-center py-24 text-center">
         <h1 className="text-6xl font-extrabold tracking-tight text-primary sm:text-8xl">Bert.</h1>
         <p className="mt-6 max-w-xl text-lg text-muted-foreground">

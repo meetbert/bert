@@ -1,8 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
-import { Navbar } from '@/components/Navbar';
 import { useAuth } from '@/contexts/AuthContext';
 import { StatusDropdown } from '@/components/StatusDropdown';
 import { ImportModal } from '@/components/ImportModal';
@@ -25,6 +24,7 @@ const PAGE_SIZE = 25;
 const Invoices = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showImport, setShowImport] = useState(false);
   const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);
   const [rawProjects, setRawProjects] = useState<Project[]>([]);
@@ -35,11 +35,23 @@ const Invoices = () => {
   const [filterProject, setFilterProject] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterProjectScope, setFilterProjectScope] = useState<'active' | 'all' | 'archived'>('active');
-  const [quickFilter, setQuickFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
+  const [quickFilter, setQuickFilter] = useState<'all' | 'paid' | 'unpaid' | 'overdue'>(() => {
+    const status = new URLSearchParams(window.location.search).get('status');
+    if (status === 'overdue' || status === 'unpaid') return status;
+    return 'all';
+  });
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(0);
   const { baseCurrency } = useUserSettings();
   const { rates } = useExchangeRates(baseCurrency);
+
+  useEffect(() => {
+    const status = new URLSearchParams(location.search).get('status');
+    if (status === 'overdue' || status === 'unpaid') {
+      setQuickFilter(status);
+      setPage(0);
+    }
+  }, [location.search]);
 
   const fetchData = useCallback(async () => {
     const [i, p, c] = await Promise.all([
@@ -84,9 +96,11 @@ const Invoices = () => {
   const filtered = useMemo(() => {
     let result = [...invoices];
 
-    // Quick filter — paid/unpaid (unpaid includes overdue)
+    // Quick filter
     if (quickFilter === 'unpaid') {
       result = result.filter((i) => i.payment_status === 'unpaid' || i.payment_status === 'overdue');
+    } else if (quickFilter === 'overdue') {
+      result = result.filter((i) => i.payment_status === 'overdue');
     } else if (quickFilter === 'paid') {
       result = result.filter((i) => i.payment_status === 'paid');
     }
@@ -181,14 +195,13 @@ const Invoices = () => {
 
   return (
     <div className="min-h-screen">
-      <Navbar />
       <div className="container space-y-6 py-8">
         <h1 className="text-2xl font-bold">Invoices</h1>
 
         {/* Quick filter + Project scope tabs + Import/Export */}
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex gap-1 rounded-lg bg-secondary p-1">
-            {([['all', 'All'], ['paid', 'Paid'], ['unpaid', 'Unpaid']] as const).map(([key, label]) => (
+            {([['all', 'All'], ['paid', 'Paid'], ['unpaid', 'Unpaid'], ['overdue', 'Overdue']] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => { setQuickFilter(key); setPage(0); }}

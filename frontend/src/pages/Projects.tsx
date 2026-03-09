@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Project } from '@/types/database';
-import { Navbar } from '@/components/Navbar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -91,7 +90,6 @@ const Projects = () => {
 
   return (
     <div className="min-h-screen">
-      <Navbar />
       <div data-tour="projects-list" className="container space-y-6 py-8">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Projects</h1>

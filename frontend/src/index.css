@@ -6,6 +6,7 @@
 
 @layer base {
   :root {
+    --sidebar-width: 256px;
     --background: 0 0% 100%;
     --foreground: 0 0% 7%;
 

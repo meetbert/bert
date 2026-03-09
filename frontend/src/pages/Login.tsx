@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Navbar } from '@/components/Navbar';
 import { toast } from '@/hooks/use-toast';
 
 const Login = () => {
@@ -62,7 +61,6 @@ const Login = () => {
 
   return (
     <div className="min-h-screen">
-      <Navbar />
       <div className="container flex items-center justify-center py-20">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">

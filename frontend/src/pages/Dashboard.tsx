@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
-import { Navbar } from '@/components/Navbar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -109,7 +108,6 @@ const Dashboard = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <Navbar />
         <div className="container space-y-8 py-8">
           <Skeleton className="h-8 w-40" />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -126,7 +124,6 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen">
-      <Navbar />
       <div className="container space-y-8 py-8">
         <h1 className="text-2xl font-bold">Dashboard</h1>
 
@@ -181,9 +178,8 @@ const Dashboard = () => {
         {/* Filtered invoice list from KPI click */}
         {filteredInvoices && (
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="mb-3">
               <h2 className="text-sm font-semibold capitalize">{kpiFilter === 'dueThisWeek' ? 'Due This Week' : kpiFilter === 'outstanding' ? 'Outstanding Invoices' : `${kpiFilter} Invoices`}</h2>
-              <Button variant="ghost" size="sm" onClick={() => setKpiFilter(null)}>Clear</Button>
             </div>
             {filteredInvoices.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">No invoices in this category.</p>
@@ -209,11 +205,9 @@ const Dashboard = () => {
                     ))}
                   </tbody>
                 </table>
-                {filteredInvoices.length > 10 && (
-                  <div className="border-t p-2">
-                    <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate('/invoices')}>View all →</Button>
-                  </div>
-                )}
+                <div className="border-t p-2">
+                  <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate(`/invoices?status=${kpiFilter === 'overdue' ? 'overdue' : 'unpaid'}`)}>View all →</Button>
+                </div>
               </div>
             )}
           </div>

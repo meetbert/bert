@@ -39,6 +39,7 @@ const ProjectDetail = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const [assignableCategories, setAssignableCategories] = useState<Category[]>([]);
+  const [sort, setSort] = useState('newest');
 
   const fetchData = () => {
     if (!id) return;

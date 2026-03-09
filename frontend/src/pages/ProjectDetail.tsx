@@ -135,6 +135,12 @@ const ProjectDetail = () => {
     return { month: label, value };
   });
 
+  const sortedInvoices = [...invoices].sort((a, b) => {
+    if (sort === 'newest') return (b.invoice_date ?? '').localeCompare(a.invoice_date ?? '');
+    if (sort === 'oldest') return (a.invoice_date ?? '').localeCompare(b.invoice_date ?? '');
+    return convertToBase(b.total ?? 0, b.currency ?? baseCurrency, rates) - convertToBase(a.total ?? 0, a.currency ?? baseCurrency, rates);
+  });
+
   return (
     <div className="min-h-screen">
       <Navbar />

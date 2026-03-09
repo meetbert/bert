@@ -242,7 +242,7 @@ const ProjectDetail = () => {
             <tbody>
               {sortedInvoices.length === 0 ? (
                 <tr><td colSpan={7} className="py-8 text-center text-sm text-muted-foreground">No invoices for this project yet.</td></tr>
-              ) : invoices.map((inv) => {
+              ) : sortedInvoices.map((inv) => {
                 const unassigned = !inv.category_id;
                 return (
                   <tr

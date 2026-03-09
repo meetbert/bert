@@ -219,6 +219,19 @@ const ProjectDetail = () => {
           )}
         </div>
 
+        {/* Sort + count */}
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">{invoices.length} invoice{invoices.length !== 1 ? 's' : ''}</p>
+          <Select value={sort} onValueChange={setSort}>
+            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest</SelectItem>
+              <SelectItem value="oldest">Oldest</SelectItem>
+              <SelectItem value="total_desc">Total (high)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Invoice table */}
         <div className="overflow-auto rounded-lg border">
           <table className="w-full text-sm">
@@ -227,7 +240,7 @@ const ProjectDetail = () => {
               <th className="p-3">Total</th><th className="p-3">Category</th><th className="p-3">Status</th>
             </tr></thead>
             <tbody>
-              {invoices.length === 0 ? (
+              {sortedInvoices.length === 0 ? (
                 <tr><td colSpan={7} className="py-8 text-center text-sm text-muted-foreground">No invoices for this project yet.</td></tr>
               ) : invoices.map((inv) => {
                 const unassigned = !inv.category_id;

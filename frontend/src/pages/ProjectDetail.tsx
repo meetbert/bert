@@ -18,7 +18,7 @@ import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency, convertToBase } from '@/lib/currency';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { FileText, DollarSign, Target, AlertCircle, ArrowLeft, Pencil, Trash2, ExternalLink, ImageIcon } from 'lucide-react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
 import { ProjectEditDialog } from '@/components/ProjectEditDialog';
 
 const COLORS = ['hsl(0,100%,65%)', 'hsl(0,0%,20%)', 'hsl(0,0%,45%)', 'hsl(0,0%,70%)', 'hsl(0,0%,85%)', 'hsl(38,92%,50%)'];
@@ -196,8 +196,14 @@ const ProjectDetail = () => {
         <div className="grid gap-6 lg:grid-cols-3">
           {catSpend.length > 0 && (
             <Card><CardHeader><CardTitle className="text-sm">By Category</CardTitle></CardHeader><CardContent>
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart><Pie data={catSpend} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70}>{catSpend.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /></PieChart>
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={catSpend} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={65}>
+                    {catSpend.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => formatCurrency(v, baseCurrency)} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                </PieChart>
               </ResponsiveContainer>
             </CardContent></Card>
           )}

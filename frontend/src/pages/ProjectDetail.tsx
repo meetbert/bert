@@ -39,6 +39,7 @@ const ProjectDetail = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const [assignableCategories, setAssignableCategories] = useState<Category[]>([]);
+  const [sort, setSort] = useState('newest');
 
   const fetchData = () => {
     if (!id) return;
@@ -134,6 +135,12 @@ const ProjectDetail = () => {
     return { month: label, value };
   });
 
+  const sortedInvoices = [...invoices].sort((a, b) => {
+    if (sort === 'newest') return (b.invoice_date ?? '').localeCompare(a.invoice_date ?? '');
+    if (sort === 'oldest') return (a.invoice_date ?? '').localeCompare(b.invoice_date ?? '');
+    return convertToBase(b.total ?? 0, b.currency ?? baseCurrency, rates) - convertToBase(a.total ?? 0, a.currency ?? baseCurrency, rates);
+  });
+
   return (
     <div className="min-h-screen">
       <Navbar />
@@ -212,6 +219,19 @@ const ProjectDetail = () => {
           )}
         </div>
 
+        {/* Sort + count */}
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">{invoices.length} invoice{invoices.length !== 1 ? 's' : ''}</p>
+          <Select value={sort} onValueChange={setSort}>
+            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest</SelectItem>
+              <SelectItem value="oldest">Oldest</SelectItem>
+              <SelectItem value="total_desc">Total (high)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Invoice table */}
         <div className="overflow-auto rounded-lg border">
           <table className="w-full text-sm">
@@ -220,9 +240,9 @@ const ProjectDetail = () => {
               <th className="p-3">Total</th><th className="p-3">Category</th><th className="p-3">Status</th>
             </tr></thead>
             <tbody>
-              {invoices.length === 0 ? (
+              {sortedInvoices.length === 0 ? (
                 <tr><td colSpan={7} className="py-8 text-center text-sm text-muted-foreground">No invoices for this project yet.</td></tr>
-              ) : invoices.map((inv) => {
+              ) : sortedInvoices.map((inv) => {
                 const unassigned = !inv.category_id;
                 return (
                   <tr

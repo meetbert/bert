@@ -1,8 +1,7 @@
-https://www.meetbert.uk
+https://www.meetbert.uk  
 
-Login:  
-username: demo@meetbert.uk  
-password: !ImperialAIV26!  
+Username: demo@meetbert.uk  
+Password: !ImperialAIV26!  
 
 
 

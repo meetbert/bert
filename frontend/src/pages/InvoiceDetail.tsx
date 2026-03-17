@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
 import { Button } from '@/components/ui/button';
@@ -193,7 +193,7 @@ const InvoiceDetail = () => {
   return (
     <div className="min-h-screen">
       <div className="container space-y-6 py-8">
-        <Link to="/invoices" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> All Invoices</Link>
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back</button>
 
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-4">

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDemoData } from '@/contexts/DemoDataContext';
 import { UserSettings } from '@/types/database';
 
 export function useUserSettings() {
   const { user } = useAuth();
+  const { isDemoMode, demoCurrency } = useDemoData();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -21,7 +23,7 @@ export function useUserSettings() {
       });
   }, [user]);
 
-  const baseCurrency = settings?.base_currency ?? 'EUR';
+  const baseCurrency = isDemoMode ? demoCurrency : (settings?.base_currency ?? 'EUR');
 
   return { settings, loading, baseCurrency };
 }

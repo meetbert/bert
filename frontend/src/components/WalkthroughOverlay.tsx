@@ -1,12 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useWalkthrough } from '@/contexts/WalkthroughContext';
-import { useDemoData } from '@/contexts/DemoDataContext';
 import { Button } from '@/components/ui/button';
 import { X, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 
 export const WalkthroughOverlay = () => {
   const { isActive, step, currentStep, totalSteps, next, prev, skip } = useWalkthrough();
-  const { stopDemo } = useDemoData();
   const [, forceUpdate] = useState(0);
   const rectRef = useRef<DOMRect | null>(null);
   const spotlightRef = useRef<HTMLDivElement>(null);
@@ -15,17 +13,15 @@ export const WalkthroughOverlay = () => {
 
   const handleSkip = useCallback(() => {
     skip();
-    stopDemo();
-  }, [skip, stopDemo]);
+  }, [skip]);
 
   const handleNext = useCallback(() => {
     if (currentStep === totalSteps - 1) {
       skip();
-      stopDemo();
     } else {
       next();
     }
-  }, [currentStep, totalSteps, next, skip, stopDemo]);
+  }, [currentStep, totalSteps, next, skip]);
 
   // Directly update DOM elements for zero-lag tracking
   const applyRect = useCallback((r: DOMRect) => {
@@ -132,7 +128,7 @@ export const WalkthroughOverlay = () => {
   return (
     <>
       {/* Backdrop — SVG-based cutout for true transparency */}
-      <svg className="fixed inset-0 z-[998] w-full h-full pointer-events-auto">
+      <svg className="fixed inset-0 z-[998] w-full h-full pointer-events-none">
         <defs>
           <mask id="tour-mask">
             <rect width="100%" height="100%" fill="white" />

@@ -20,6 +20,7 @@ import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { FileText, DollarSign, Target, AlertCircle, ArrowLeft, Pencil, Trash2, ExternalLink, ImageIcon } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
 import { ProjectEditDialog } from '@/components/ProjectEditDialog';
+import { useDemoData } from '@/contexts/DemoDataContext';
 
 const COLORS = ['hsl(0,100%,65%)', 'hsl(0,0%,20%)', 'hsl(0,0%,45%)', 'hsl(0,0%,70%)', 'hsl(0,0%,85%)', 'hsl(38,92%,50%)'];
 
@@ -27,6 +28,7 @@ const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { baseCurrency } = useUserSettings();
+  const { isDemoMode, demoProjects, demoInvoices, demoCategories, demoProjectCategories } = useDemoData();
   const { rates } = useExchangeRates(baseCurrency);
   const [project, setProject] = useState<Project | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -42,6 +44,25 @@ const ProjectDetail = () => {
 
   const fetchData = () => {
     if (!id) return;
+
+    if (isDemoMode && id.startsWith('demo-')) {
+      const proj = demoProjects.find(p => p.id === id) ?? null;
+      setProject(proj);
+      const today = new Date().toISOString().split('T')[0];
+      const invs = demoInvoices.filter(i => i.project_id === id).map(inv => {
+        let status = inv.payment_status;
+        if (status === 'unpaid' && inv.due_date && inv.due_date < today) status = 'overdue';
+        return { ...inv, payment_status: status };
+      });
+      setInvoices(invs as Invoice[]);
+      setCategories(demoCategories);
+      const projCatIds = new Set(demoProjectCategories.filter(pc => pc.project_id === id).map(pc => pc.category_id));
+      setAssignableCategories(projCatIds.size > 0 ? demoCategories.filter(c => projCatIds.has(c.id)) : demoCategories);
+      setDocs([]);
+      setLoading(false);
+      return;
+    }
+
     Promise.all([
       supabase.from('projects').select('*').eq('id', id).single(),
       supabase.from('invoices').select('*, category:invoice_categories(*)').eq('project_id', id),

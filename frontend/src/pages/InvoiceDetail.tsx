@@ -15,6 +15,7 @@ import { formatCurrency, convertToBase, SUPPORTED_CURRENCIES } from '@/lib/curre
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { ArrowLeft, Pencil, Check, X, Download, Trash2, Clock, FileText } from 'lucide-react';
+import { useDemoData } from '@/contexts/DemoDataContext';
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -31,9 +32,19 @@ const InvoiceDetail = () => {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const { baseCurrency } = useUserSettings();
   const { rates } = useExchangeRates(baseCurrency);
+  const { isDemoMode, demoInvoices, demoProjects, demoCategories } = useDemoData();
 
   const fetchInvoice = async () => {
     if (!id) { setLoading(false); return; }
+
+    if (isDemoMode && id.startsWith('demo-')) {
+      const inv = demoInvoices.find(i => i.id === id) ?? null;
+      setInvoice(inv);
+      setProjects(demoProjects as Project[]);
+      setCategories(demoCategories);
+      setLoading(false);
+      return;
+    }
     try {
       const [inv, p, c] = await Promise.all([
         supabase.from('invoices').select('*').eq('id', id).single(),

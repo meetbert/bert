@@ -119,6 +119,8 @@ interface DemoDataContextType {
   demoInvoices: Invoice[];
   demoCategories: Category[];
   demoProjectCategories: typeof DEMO_PROJECT_CATEGORIES;
+  demoCurrency: string;
+  setDemoCurrency: (c: string) => void;
   startDemo: () => void;
   stopDemo: () => void;
 }
@@ -133,9 +135,10 @@ export const useDemoData = () => {
 
 export const DemoDataProvider = ({ children }: { children: React.ReactNode }) => {
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [demoCurrency, setDemoCurrency] = useState('EUR');
 
   const startDemo = useCallback(() => setIsDemoMode(true), []);
-  const stopDemo = useCallback(() => setIsDemoMode(false), []);
+  const stopDemo = useCallback(() => { setIsDemoMode(false); setDemoCurrency('EUR'); }, []);
 
   const value = useMemo(() => ({
     isDemoMode,
@@ -143,9 +146,11 @@ export const DemoDataProvider = ({ children }: { children: React.ReactNode }) =>
     demoInvoices: DEMO_INVOICES,
     demoCategories: DEMO_CATEGORIES,
     demoProjectCategories: DEMO_PROJECT_CATEGORIES,
+    demoCurrency,
+    setDemoCurrency,
     startDemo,
     stopDemo,
-  }), [isDemoMode, startDemo, stopDemo]);
+  }), [isDemoMode, demoCurrency, startDemo, stopDemo]);
 
   return (
     <DemoDataContext.Provider value={value}>

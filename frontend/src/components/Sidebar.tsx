@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDemoData } from '@/contexts/DemoDataContext';
 import { LayoutDashboard, FolderOpen, FileText, ChevronLeft, ChevronRight, Settings, LogOut } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
@@ -17,6 +18,7 @@ const navItems = [
 export const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === 'true');
   const { user, signOut } = useAuth();
+  const { isDemoMode, stopDemo } = useDemoData();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -38,15 +40,17 @@ export const Sidebar = () => {
   };
 
   const initials = (() => {
+    if (isDemoMode) return 'B';
     const name = user?.user_metadata?.full_name;
     if (name) return name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
     return user?.email?.[0]?.toUpperCase() ?? '?';
   })();
 
-  const displayName = user?.user_metadata?.full_name ?? user?.email ?? '';
-  const email = user?.email ?? '';
+  const displayName = isDemoMode ? 'Bert Demo' : (user?.user_metadata?.full_name ?? user?.email ?? '');
+  const email = isDemoMode ? '' : (user?.email ?? '');
 
   const handleSignOut = async () => {
+    if (isDemoMode) { stopDemo(); navigate('/'); return; }
     await signOut();
     navigate('/login');
   };
@@ -59,7 +63,11 @@ export const Sidebar = () => {
         {/* Header */}
         <div className="p-3 border-b border-border shrink-0">
           <div className={`flex items-center rounded-md px-3 py-2 ${collapsed ? 'justify-center' : ''}`}>
-            <span className="font-extrabold text-primary text-xl">Bert.</span>
+            {isDemoMode ? (
+              <button onClick={() => { stopDemo(); navigate('/'); }} className="font-extrabold text-primary text-xl hover:opacity-70 transition-opacity">Bert.</button>
+            ) : (
+              <span className="font-extrabold text-primary text-xl">Bert.</span>
+            )}
           </div>
         </div>
 
@@ -121,7 +129,7 @@ export const Sidebar = () => {
                 className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
               >
                 <LogOut className="h-4 w-4" />
-                Logout
+                {isDemoMode ? 'Exit demo' : 'Logout'}
               </button>
             </PopoverContent>
           </Popover>

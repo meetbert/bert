@@ -42,7 +42,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
-import { Plus, FileText, X, Upload, Loader2, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Plus, FileText, X, Upload, Loader2, ArrowLeft, ArrowRight, Info } from 'lucide-react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
 
@@ -67,6 +67,7 @@ export const ProjectCreationWizard = ({
   const [extracting, setExtracting] = useState(false);
   const [converting, setConverting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [demoExtracted, setDemoExtracted] = useState(false);
 
   // Step 1 — Brief + Project Details
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -100,8 +101,28 @@ export const ProjectCreationWizard = ({
 
   // ── Brief extraction ──────────────────────────────────────────────
 
+  const DEMO_BRIEF = {
+    name: 'Coastal Horizons Documentary',
+    description: 'A feature-length documentary following fishing communities along the Atlantic coast, exploring the intersection of tradition and climate change. Principal photography across three locations over six weeks.',
+    known_vendors: 'Lens & Light Equipment Co, Northern Drone Services, Pinewood Catering Ltd, Studio X Post Production',
+    known_locations: 'Porto, Lisbon, Galicia',
+  };
+
   const extractFromFile = async (file: File) => {
     setExtracting(true);
+
+    if (isDemoMode) {
+      await new Promise(r => setTimeout(r, 2000));
+      if (!name.trim()) setName(DEMO_BRIEF.name);
+      setDescription(prev => prev.trim() ? prev : DEMO_BRIEF.description);
+      setKnownVendors(DEMO_BRIEF.known_vendors);
+      setKnownLocations(DEMO_BRIEF.known_locations);
+      toast({ title: 'Brief extracted', description: 'Project details filled in below — review and edit as needed.' });
+      setDemoExtracted(true);
+      setExtracting(false);
+      return;
+    }
+
     try {
       const form = new FormData();
       form.append('file', file);
@@ -430,7 +451,16 @@ export const ProjectCreationWizard = ({
             />
           </div>
 
-          <p className="text-xs text-muted-foreground">The description, vendors, and locations above are all seen by the AI when assigning invoices and answering questions about this project.</p>
+          {isDemoMode ? (
+            demoExtracted && (
+              <div className="flex items-start gap-2 rounded-md border bg-muted/60 px-3 py-2.5">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">These are sample details filled in for the demo. In your live account, Bert reads your actual brief and extracts the details accurately.</p>
+              </div>
+            )
+          ) : (
+            <p className="text-xs text-muted-foreground">The description, vendors, and locations above are all seen by the AI when assigning invoices and answering questions about this project.</p>
+          )}
 
           <div className="flex justify-end gap-2 pt-2">
             {onCancel && (

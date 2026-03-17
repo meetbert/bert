@@ -42,6 +42,10 @@ const InvoiceDetail = () => {
       setInvoice(inv);
       setProjects(demoProjects as Project[]);
       setCategories(demoCategories);
+      if (inv?.document_path?.startsWith('blob:')) {
+        setDocumentUrl(inv.document_path);
+        setDownloadUrl(inv.document_path);
+      }
       setLoading(false);
       return;
     }
@@ -166,7 +170,7 @@ const InvoiceDetail = () => {
   ] : [];
 
   const docPath = invoice?.document_path?.toLowerCase() ?? '';
-  const isPdf = docPath.endsWith('.pdf');
+  const isPdf = docPath.endsWith('.pdf') || docPath.startsWith('blob:');
   const isImage = /\.(jpg|jpeg|png|gif|webp)$/.test(docPath);
 
   if (loading) return (

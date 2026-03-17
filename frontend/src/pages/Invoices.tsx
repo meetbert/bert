@@ -245,9 +245,7 @@ const Invoices = () => {
           </div>
           <div className="ml-auto flex gap-2">
             <button
-              onClick={() => isDemoMode
-                ? toast({ title: 'Available in your live account', description: 'Connect your email inbox and import invoices in your live Bert account.' })
-                : setShowImport(true)}
+              onClick={() => setShowImport(true)}
               className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm font-medium transition-colors hover:bg-secondary"
             >
               <Upload className="h-4 w-4" /> Import

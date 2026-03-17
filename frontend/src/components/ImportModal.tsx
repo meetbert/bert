@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { useDemoData } from '@/contexts/DemoDataContext';
+import { Invoice } from '@/types/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { Upload, FileText, Table, Loader2, CheckCircle2 } from 'lucide-react';
+import { Upload, FileText, Table, Loader2, CheckCircle2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
@@ -99,6 +101,17 @@ function splitCsvLine(line: string): string[] {
   return result;
 }
 
+// ── Demo mock data ────────────────────────────────────────────────────────────
+
+const todayStr = () => new Date().toISOString().split('T')[0];
+const daysFrom = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0]; };
+
+const DEMO_EXTRACTIONS = [
+  { vendor_name: 'Lens & Light Equipment Co', invoice_number: 'LL-8821', invoice_date: todayStr(), due_date: daysFrom(30), currency: 'EUR', subtotal: 4500, vat: 900, total: 5400, description: 'Camera equipment hire — March' },
+  { vendor_name: 'Studio X Post Production', invoice_number: 'INV-0872', invoice_date: todayStr(), due_date: daysFrom(14), currency: 'GBP', subtotal: 12000, vat: 2400, total: 14400, description: 'Post production — colour grading' },
+  { vendor_name: 'Pinewood Catering Ltd', invoice_number: 'PC-112', invoice_date: todayStr(), due_date: daysFrom(7), currency: 'EUR', subtotal: 1800, vat: 360, total: 2160, description: 'On-set catering — crew of 12' },
+];
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -110,6 +123,7 @@ interface Props {
 
 export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => {
   const { session, user } = useAuth();
+  const { isDemoMode, demoProjects, demoCategories, addDemoInvoice } = useDemoData();
 
   // ── Queue state ────────────────────────────────────────────────────────────
   const [queue, setQueue] = useState<File[]>([]);
@@ -139,7 +153,13 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
 
   // ── Load projects & categories ────────────────────────────────────────────
   useEffect(() => {
-    if (!open || !user) return;
+    if (!open) return;
+    if (isDemoMode) {
+      setProjects(demoProjects.filter(p => p.status === 'Active').map(p => ({ id: p.id, name: p.name })));
+      setCategories(demoCategories.map(c => ({ id: c.id, name: c.name })));
+      return;
+    }
+    if (!user) return;
     const load = async () => {
       const [{ data: p }, { data: c }] = await Promise.all([
         supabase.from('projects').select('id, name').eq('user_id', user.id).eq('status', 'Active'),
@@ -149,7 +169,7 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
       setCategories(c ?? []);
     };
     load();
-  }, [open, user]);
+  }, [open, user, isDemoMode]);
 
   // ── File intake (drag-drop or click) ──────────────────────────────────────
 
@@ -183,10 +203,23 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
 
   const extractFile = async (files: File[], idx: number) => {
     const file = files[idx];
-    if (!file || !user) return;
+    if (!file) return;
     setExtracting(true);
     setInvoiceData(null);
     setEditFields({});
+
+    // Demo mode: simulate AI extraction with mock data
+    if (isDemoMode) {
+      await new Promise(r => setTimeout(r, 1800));
+      const mock = DEMO_EXTRACTIONS[Math.floor(Math.random() * DEMO_EXTRACTIONS.length)];
+      const blobUrl = URL.createObjectURL(file);
+      setInvoiceData({ storagePath: blobUrl, ...mock });
+      setEditFields({ ...mock, project_id: projectId ?? '', category_id: '' });
+      setExtracting(false);
+      return;
+    }
+
+    if (!user) { setExtracting(false); return; }
 
     try {
       const storagePath = `${user.id}/imports/${Date.now()}_${file.name}`;
@@ -238,8 +271,39 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
   // ── Save edits to invoice ──────────────────────────────────────────────────
 
   const handleSaveInvoice = async () => {
-    if (!invoiceData || !user) return;
+    if (!invoiceData) return;
     setSaving(true);
+
+    // Demo mode: add to local demo state
+    if (isDemoMode) {
+      const newInvoice: Invoice = {
+        id: `demo-inv-${Date.now()}`,
+        vendor_name: editFields.vendor_name || null,
+        invoice_number: editFields.invoice_number || null,
+        invoice_date: editFields.invoice_date || null,
+        due_date: editFields.due_date || null,
+        currency: editFields.currency || 'EUR',
+        subtotal: editFields.subtotal ? Number(editFields.subtotal) : null,
+        vat: editFields.vat ? Number(editFields.vat) : null,
+        total: editFields.total ? Number(editFields.total) : null,
+        description: editFields.description || null,
+        project_id: editFields.project_id || null,
+        category_id: editFields.category_id || null,
+        document_path: invoiceData?.storagePath ?? null, document_hash: null, line_items: null,
+        payment_status: 'unpaid', processing_status: 'complete',
+        follow_up_count: 0, last_followed_up_at: null, human_notified_at: null,
+        created_at: new Date().toISOString(), updated_at: null,
+        project: demoProjects.find(p => p.id === editFields.project_id),
+        category: demoCategories.find(c => c.id === editFields.category_id),
+      } as unknown as Invoice;
+      addDemoInvoice(newInvoice);
+      onImported();
+      setSaving(false);
+      advanceOrClose(queue, queueIdx);
+      return;
+    }
+
+    if (!user) { setSaving(false); return; }
     try {
       const record: Record<string, any> = {
         user_id: user.id,
@@ -490,6 +554,12 @@ export const ImportModal = ({ open, onClose, onImported, projectId }: Props) => 
                   <CheckCircle2 className="h-4 w-4" />
                   Invoice processed — review & confirm details
                 </div>
+                {isDemoMode && (
+                  <div className="flex items-start gap-2 rounded-md border bg-muted/60 px-3 py-2.5">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">These are sample details filled in for the demo. In your live account, Bert reads your actual invoice and extracts the details accurately.</p>
+                  </div>
+                )}
 
                 <div className="space-y-3 rounded-lg border p-4">
                   <div className="flex gap-3">

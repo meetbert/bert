@@ -198,6 +198,7 @@ interface DemoDataContextType {
   addDemoProjectCategories: (entries: Omit<ProjectCategory, 'id' | 'created_at'>[]) => void;
   addDemoCategory: (name: string) => Category;
   addDemoProjectDocs: (projectId: string, files: File[]) => Promise<void>;
+  addDemoInvoice: (invoice: Invoice) => void;
   startDemo: () => void;
   stopDemo: () => void;
 }
@@ -332,6 +333,10 @@ export const DemoDataProvider = ({ children }: { children: React.ReactNode }) =>
 
   // ── Document operations ────────────────────────────────────────────
 
+  const addDemoInvoice = useCallback((invoice: Invoice) => {
+    setDemoInvoices(prev => [invoice, ...prev]);
+  }, [setDemoInvoices]);
+
   const addDemoProjectDocs = useCallback(async (projectId: string, files: File[]) => {
     const stored: StoredDoc[] = [];
     const demoDocs: DemoDoc[] = [];
@@ -370,9 +375,10 @@ export const DemoDataProvider = ({ children }: { children: React.ReactNode }) =>
     addDemoProjectCategories,
     addDemoCategory,
     addDemoProjectDocs,
+    addDemoInvoice,
     startDemo,
     stopDemo,
-  }), [isDemoMode, demoProjects, demoInvoices, demoProjectCategories, demoCategories, demoProjectDocs, demoCurrencyState, setDemoCurrency, updateDemoInvoice, deleteDemoInvoice, updateDemoProject, deleteDemoProject, addDemoProject, addDemoProjectCategories, addDemoCategory, addDemoProjectDocs, startDemo, stopDemo]);
+  }), [isDemoMode, demoProjects, demoInvoices, demoProjectCategories, demoCategories, demoProjectDocs, demoCurrencyState, setDemoCurrency, updateDemoInvoice, deleteDemoInvoice, updateDemoProject, deleteDemoProject, addDemoProject, addDemoProjectCategories, addDemoCategory, addDemoProjectDocs, addDemoInvoice, startDemo, stopDemo]);
 
   return (
     <DemoDataContext.Provider value={value}>

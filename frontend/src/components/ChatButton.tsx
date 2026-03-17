@@ -13,10 +13,58 @@ type Message = { role: 'user' | 'assistant'; text: string };
 
 const PANEL_WIDTH = 'sm:w-[400px]';
 
+// ── Demo chat ──────────────────────────────────────────────────────────────────
+
+const DEMO_QUERIES = [
+  'Which invoices are overdue?',
+  'How much have I spent on equipment this month?',
+  'Show me the Atlantic Documentary budget',
+  'Who are my top vendors?',
+  'What is my total spend this month?',
+  'How many active projects do I have?',
+];
+
+const DEMO_RESPONSES: Record<string, string> = {
+  'Which invoices are overdue?':
+    'You have 1 overdue invoice:\n\n• Lisbon Catering Co — €2,100\n  Atlantic Documentary · 14 days overdue\n\nIn your live account I can automatically send follow-up emails to chase overdue payments for you.',
+
+  'How much have I spent on equipment this month?':
+    'Across your active projects, you\'ve spent €42,000 on camera and aerial equipment:\n\n• Atlantic Camera Hire — €25,000 (Camera)\n• Northern Drone Services — €3,800 (Aerial, Atlantic)\n• Drone Cinematics Ltd — €13,200 (Aerial, Desert)\n\nIn your live account I can break this down by project, date range, or any category.',
+
+  'Show me the Atlantic Documentary budget':
+    'Atlantic Documentary\n\nBudget: €120,000\nSpent: €20,600 (17.2%)\nRemaining: €99,400\n\nBy category:\n• Camera — €8,500\n• Lighting — €6,200\n• Catering — €2,100 ⚠️ overdue\n• Aerial — €3,800\n\nOne invoice needs attention. In your live account I can chase the overdue payment automatically.',
+
+  'Who are my top vendors?':
+    'Your top vendors by total spend:\n\n1. Atlantic Camera Hire — €25,000\n2. Drone Cinematics Ltd — €13,200\n3. Northern Drone Services — €3,800\n4. Lisbon Catering Co — €2,100 ⚠️ payment overdue\n\nIn your live account I can show full vendor history, flag late payers, and track spend trends over time.',
+
+  'What is my total spend this month?':
+    'Total invoiced spend across all projects this month: €44,100\n\n• Atlantic Documentary — €20,600 (17.2% of budget)\n• Desert Expedition — €23,500 (17.4% of budget)\n\nIn your live account I can break this down by week, category, or payment status.',
+
+  'How many active projects do I have?':
+    'You have 2 active projects:\n\n• Atlantic Documentary — €120,000 budget, 17.2% spent\n• Desert Expedition — €135,000 budget, 17.4% spent\n\nCombined budget: €255,000 | Combined spend: €44,100\n\nIn your live account I can track budget burn rates and flag anything heading over budget.',
+};
+
+const DEMO_FALLBACK = 'In your live Bert account I can answer questions about your invoices, budgets, vendors, and projects in real time. Try one of the suggested questions to see what I can do.';
+
+function getDemoResponse(text: string): string {
+  return DEMO_RESPONSES[text] ?? DEMO_FALLBACK;
+}
+
+// ── Component ──────────────────────────────────────────────────────────────────
+
 export const ChatButton = () => {
   const { session, user } = useAuth();
   const { isDemoMode } = useDemoData();
   const [open, setOpen] = useState(false);
+
+  // Demo chat state
+  const [demoMessages, setDemoMessages] = useState<Message[]>([
+    { role: 'assistant', text: 'Hi! I\'m Bert — your AI finance assistant. Ask me anything about your projects and invoices, or tap one of the examples below.' },
+  ]);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoInput, setDemoInput] = useState('');
+  const demoEndRef = useRef<HTMLDivElement>(null);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -60,10 +108,24 @@ export const ChatButton = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    demoEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [demoMessages, demoLoading]);
+
   if (!user && !isDemoMode) return null;
 
-  // Demo mode: show placeholder chat panel
+  // ── Demo mode: interactive mock chat ──────────────────────────────────────
   if (isDemoMode) {
+    const sendDemoMessage = async (text: string) => {
+      if (!text.trim() || demoLoading) return;
+      setDemoMessages(prev => [...prev, { role: 'user', text }]);
+      setDemoInput('');
+      setDemoLoading(true);
+      await new Promise(r => setTimeout(r, 1500));
+      setDemoMessages(prev => [...prev, { role: 'assistant', text: getDemoResponse(text) }]);
+      setDemoLoading(false);
+    };
+
     return (
       <>
         {!open && (
@@ -86,29 +148,61 @@ export const ChatButton = () => {
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-              <Sparkles className="h-7 w-7 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">Chat available in your live account</p>
-              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                In your live Bert account you can ask questions like:
-              </p>
-            </div>
-            <ul className="w-full space-y-2 text-left">
-              {[
-                'Which invoices are overdue?',
-                'How much have I spent on equipment this month?',
-                'Upload and process this invoice',
-                'Show me the Atlantic Documentary budget',
-              ].map((q) => (
-                <li key={q} className="flex items-start gap-2 rounded-lg border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
-                  <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/60" />
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            {demoMessages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                  m.role === 'user'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-secondary-foreground'
+                }`}>
+                  {m.text}
+                </div>
+              </div>
+            ))}
+            {/* Suggestion chips — always visible */}
+            <div className="space-y-2">
+              {DEMO_QUERIES.map((q) => (
+                <button
+                  key={q}
+                  onClick={() => sendDemoMessage(q)}
+                  disabled={demoLoading}
+                  className="flex w-full items-start gap-2 rounded-lg border bg-secondary/40 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                >
+                  <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/60" />
                   {q}
-                </li>
+                </button>
               ))}
-            </ul>
+            </div>
+            {demoLoading && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-2 rounded-2xl bg-secondary px-4 py-2.5 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Thinking...
+                </div>
+              </div>
+            )}
+            <div ref={demoEndRef} />
+          </div>
+
+          {/* Input */}
+          <div className="border-t px-4 py-3">
+            <form
+              onSubmit={(e) => { e.preventDefault(); sendDemoMessage(demoInput); }}
+              className="flex gap-2"
+            >
+              <Input
+                value={demoInput}
+                onChange={(e) => setDemoInput(e.target.value)}
+                placeholder="Ask a question..."
+                className="flex-1"
+                disabled={demoLoading}
+              />
+              <Button type="submit" size="icon" disabled={demoLoading || !demoInput.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </form>
           </div>
         </div>
       </>

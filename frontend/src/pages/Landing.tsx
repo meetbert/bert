@@ -70,6 +70,8 @@ const Landing = () => {
       });
   }, [user, loading, navigate]);
 
+  if (loading) return null;
+
   const handleTryDemo = () => {
     startDemo();
     startTour();

@@ -35,6 +35,7 @@ async function prepareFiles(rawFiles: File[]): Promise<File[]> {
 }
 import { Textarea } from '@/components/ui/textarea';
 import { Category } from '@/types/database';
+import { useDemoData } from '@/contexts/DemoDataContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -57,6 +58,7 @@ export const ProjectCreationWizard = ({
   showProgress = true,
 }: WizardProps) => {
   const { user, session } = useAuth();
+  const { isDemoMode, demoCategories, addDemoProject, addDemoProjectCategories, addDemoCategory, addDemoProjectDocs } = useDemoData();
   const { baseCurrency } = useUserSettings();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -83,12 +85,16 @@ export const ProjectCreationWizard = ({
   const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
 
   useEffect(() => {
+    if (isDemoMode) {
+      setAvailableCategories([...demoCategories].sort((a, b) => a.name.localeCompare(b.name)));
+      return;
+    }
     supabase
       .from('invoice_categories')
       .select('*')
       .order('name')
       .then(({ data }) => setAvailableCategories(data ?? []));
-  }, []);
+  }, [isDemoMode]);
 
   const totalBudget = Array.from(selectedCategories.values()).reduce((sum, b) => sum + b, 0);
 
@@ -175,6 +181,14 @@ export const ProjectCreationWizard = ({
     const trimmed = newCategoryName.trim();
     if (!trimmed) return;
 
+    if (isDemoMode) {
+      const cat = addDemoCategory(trimmed);
+      setAvailableCategories(prev => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
+      setSelectedCategories(prev => { const next = new Map(prev); next.set(cat.id, 0); return next; });
+      setNewCategoryName('');
+      return;
+    }
+
     const { data, error } = await supabase
       .from('invoice_categories')
       .insert({ name: trimmed })
@@ -216,8 +230,41 @@ export const ProjectCreationWizard = ({
   // ── Create project ────────────────────────────────────────────────
 
   const handleCreateProject = async () => {
-    if (!user) return;
     setSubmitting(true);
+
+    if (isDemoMode) {
+      const parseList = (text: string) => text.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+      const newId = `demo-proj-${Date.now()}`;
+      addDemoProject({
+        id: newId,
+        name: name.trim(),
+        description: description.trim() || null,
+        status: 'Active',
+        budget: budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget,
+        known_vendors: parseList(knownVendors),
+        known_locations: parseList(knownLocations),
+        ai_context: null,
+        created_at: new Date().toISOString().split('T')[0],
+      });
+      if (selectedCategories.size > 0) {
+        addDemoProjectCategories(
+          Array.from(selectedCategories.entries()).map(([categoryId, budget]) => ({
+            project_id: newId,
+            category_id: categoryId,
+            budget,
+          }))
+        );
+      }
+      if (pendingFiles.length > 0) {
+        await addDemoProjectDocs(newId, pendingFiles);
+      }
+      toast({ title: 'Project created', description: `"${name}" is ready.` });
+      setSubmitting(false);
+      onComplete(newId);
+      return;
+    }
+
+    if (!user) { setSubmitting(false); return; }
 
     try {
       const parseList = (text: string) => text.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);

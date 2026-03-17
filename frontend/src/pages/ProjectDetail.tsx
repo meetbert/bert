@@ -28,7 +28,7 @@ const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { baseCurrency } = useUserSettings();
-  const { isDemoMode, demoProjects, demoInvoices, demoCategories, demoProjectCategories, updateDemoInvoice, updateDemoProject, deleteDemoProject } = useDemoData();
+  const { isDemoMode, demoProjects, demoInvoices, demoCategories, demoProjectCategories, demoProjectDocs, updateDemoInvoice, updateDemoProject, deleteDemoProject } = useDemoData();
   const { rates } = useExchangeRates(baseCurrency);
   const [project, setProject] = useState<Project | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -58,7 +58,7 @@ const ProjectDetail = () => {
       setCategories(demoCategories);
       const projCatIds = new Set(demoProjectCategories.filter(pc => pc.project_id === id).map(pc => pc.category_id));
       setAssignableCategories(projCatIds.size > 0 ? demoCategories.filter(c => projCatIds.has(c.id)) : demoCategories);
-      setDocs([]);
+      setDocs(demoProjectDocs.filter(d => d.project_id === id).map(d => ({ id: d.id, file_name: d.file_name, storage_path: '', signedUrl: d.signedUrl })));
       setLoading(false);
       return;
     }
@@ -104,7 +104,7 @@ const ProjectDetail = () => {
     setViewingDoc({ url: doc.signedUrl, name: doc.file_name });
   };
 
-  useEffect(() => { fetchData(); }, [id]);
+  useEffect(() => { fetchData(); }, [id, demoProjectDocs]);
 
   const assignCategory = async (invoiceId: string, categoryId: string) => {
     const cat = categories.find(c => c.id === categoryId);

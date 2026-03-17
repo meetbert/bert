@@ -24,7 +24,7 @@ const TOUR_STEPS: TourStep[] = [
   {
     target: 'project-budgets',
     title: 'Project Budgets',
-    description: 'Monitor budget utilisation per project. If spending exceeds the budget, the project will appear over budget. (Example: Desert Expedition)',
+    description: 'Monitor budget utilisation per project. If spending exceeds the budget, the project will be flagged as over budget.',
     route: '/dashboard',
   },
   {

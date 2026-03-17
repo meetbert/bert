@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { MessageCircle, Send, X, Paperclip, FileText, Loader2, Trash2 } from 'lucide-react';
+import { MessageCircle, Send, X, Paperclip, FileText, Loader2, Trash2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useDemoData } from '@/contexts/DemoDataContext';
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
 const ACCEPTED = '.pdf,.jpg,.jpeg,.png,.webp';
@@ -14,6 +15,7 @@ const PANEL_WIDTH = 'sm:w-[400px]';
 
 export const ChatButton = () => {
   const { session, user } = useAuth();
+  const { isDemoMode } = useDemoData();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -58,7 +60,60 @@ export const ChatButton = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  if (!user) return null;
+  if (!user && !isDemoMode) return null;
+
+  // Demo mode: show placeholder chat panel
+  if (isDemoMode) {
+    return (
+      <>
+        {!open && (
+          <button
+            onClick={() => setOpen(true)}
+            className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
+            aria-label="Open chat"
+          >
+            <MessageCircle className="h-6 w-6" />
+          </button>
+        )}
+        <div
+          className={`fixed inset-y-0 right-0 z-40 flex w-full ${PANEL_WIDTH} flex-col border-l bg-background shadow-xl transition-transform duration-300 ease-in-out ${
+            open ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          <div className="flex items-center justify-between border-b px-6 py-4">
+            <h2 className="text-base font-semibold">Talk to Bert!</h2>
+            <button onClick={() => setOpen(false)} className="rounded-sm p-1 opacity-70 hover:opacity-100">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+              <Sparkles className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Chat available in your live account</p>
+              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                In your live Bert account you can ask questions like:
+              </p>
+            </div>
+            <ul className="w-full space-y-2 text-left">
+              {[
+                'Which invoices are overdue?',
+                'How much have I spent on equipment this month?',
+                'Upload and process this invoice',
+                'Show me the Atlantic Documentary budget',
+              ].map((q) => (
+                <li key={q} className="flex items-start gap-2 rounded-lg border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
+                  <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/60" />
+                  {q}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   const clearChat = async () => {
     const userId = session?.user?.id;

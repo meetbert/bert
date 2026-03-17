@@ -28,7 +28,7 @@ const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { baseCurrency } = useUserSettings();
-  const { isDemoMode, demoProjects, demoInvoices, demoCategories, demoProjectCategories } = useDemoData();
+  const { isDemoMode, demoProjects, demoInvoices, demoCategories, demoProjectCategories, updateDemoInvoice, updateDemoProject, deleteDemoProject } = useDemoData();
   const { rates } = useExchangeRates(baseCurrency);
   const [project, setProject] = useState<Project | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -107,23 +107,40 @@ const ProjectDetail = () => {
   useEffect(() => { fetchData(); }, [id]);
 
   const assignCategory = async (invoiceId: string, categoryId: string) => {
+    const cat = categories.find(c => c.id === categoryId);
+    if (isDemoMode && invoiceId.startsWith('demo-')) {
+      updateDemoInvoice(invoiceId, { category_id: categoryId, category: cat ?? null } as any);
+      setInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
+      toast({ title: 'Category assigned' });
+      return;
+    }
     const { error } = await supabase.from('invoices').update({ category_id: categoryId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    const cat = categories.find(c => c.id === categoryId);
     setInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
     toast({ title: 'Category assigned' });
   };
 
   const changeInvoiceStatus = async (inv: Invoice, newStatus: string) => {
+    if (isDemoMode && inv.id.startsWith('demo-')) {
+      updateDemoInvoice(inv.id, { payment_status: newStatus as any });
+      setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
+      toast({ title: `Marked as ${newStatus}` });
+      return;
+    }
     const { error } = await supabase.from('invoices').update({ payment_status: newStatus }).eq('id', inv.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
     toast({ title: `Marked as ${newStatus}` });
   };
 
-
   const handleDelete = async () => {
     if (!id) return;
+    if (isDemoMode && id.startsWith('demo-')) {
+      deleteDemoProject(id);
+      toast({ title: 'Project deleted' });
+      navigate('/projects');
+      return;
+    }
     const { error } = await supabase.from('projects').delete().eq('id', id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     toast({ title: 'Project deleted' });
@@ -170,6 +187,12 @@ const ProjectDetail = () => {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold truncate max-w-md lg:max-w-xl">{project.name}</h1>
             <ProjectStatusDropdown status={project.status ?? 'Active'} onChangeStatus={async (s) => {
+              if (isDemoMode && id?.startsWith('demo-')) {
+                updateDemoProject(id!, { status: s });
+                setProject((prev) => prev ? { ...prev, status: s } : prev);
+                toast({ title: `Status changed to ${s}` });
+                return;
+              }
               const { error } = await supabase.from('projects').update({ status: s }).eq('id', id!);
               if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
               setProject((prev) => prev ? { ...prev, status: s } : prev);

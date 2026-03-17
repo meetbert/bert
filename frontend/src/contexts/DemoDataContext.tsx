@@ -121,6 +121,10 @@ interface DemoDataContextType {
   demoProjectCategories: typeof DEMO_PROJECT_CATEGORIES;
   demoCurrency: string;
   setDemoCurrency: (c: string) => void;
+  updateDemoInvoice: (id: string, changes: Partial<Invoice>) => void;
+  deleteDemoInvoice: (id: string) => void;
+  updateDemoProject: (id: string, changes: Partial<Project>) => void;
+  deleteDemoProject: (id: string) => void;
   startDemo: () => void;
   stopDemo: () => void;
 }
@@ -136,21 +140,48 @@ export const useDemoData = () => {
 export const DemoDataProvider = ({ children }: { children: React.ReactNode }) => {
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [demoCurrency, setDemoCurrency] = useState('EUR');
+  const [demoInvoices, setDemoInvoices] = useState<Invoice[]>(DEMO_INVOICES);
+  const [demoProjects, setDemoProjects] = useState<Project[]>(DEMO_PROJECTS);
 
   const startDemo = useCallback(() => setIsDemoMode(true), []);
-  const stopDemo = useCallback(() => { setIsDemoMode(false); setDemoCurrency('EUR'); }, []);
+  const stopDemo = useCallback(() => {
+    setIsDemoMode(false);
+    setDemoCurrency('EUR');
+    setDemoInvoices(DEMO_INVOICES);
+    setDemoProjects(DEMO_PROJECTS);
+  }, []);
+
+  const updateDemoInvoice = useCallback((id: string, changes: Partial<Invoice>) => {
+    setDemoInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, ...changes } : inv));
+  }, []);
+
+  const deleteDemoInvoice = useCallback((id: string) => {
+    setDemoInvoices(prev => prev.filter(inv => inv.id !== id));
+  }, []);
+
+  const updateDemoProject = useCallback((id: string, changes: Partial<Project>) => {
+    setDemoProjects(prev => prev.map(proj => proj.id === id ? { ...proj, ...changes } : proj));
+  }, []);
+
+  const deleteDemoProject = useCallback((id: string) => {
+    setDemoProjects(prev => prev.filter(proj => proj.id !== id));
+  }, []);
 
   const value = useMemo(() => ({
     isDemoMode,
-    demoProjects: DEMO_PROJECTS,
-    demoInvoices: DEMO_INVOICES,
+    demoProjects,
+    demoInvoices,
     demoCategories: DEMO_CATEGORIES,
     demoProjectCategories: DEMO_PROJECT_CATEGORIES,
     demoCurrency,
     setDemoCurrency,
+    updateDemoInvoice,
+    deleteDemoInvoice,
+    updateDemoProject,
+    deleteDemoProject,
     startDemo,
     stopDemo,
-  }), [isDemoMode, demoCurrency, startDemo, stopDemo]);
+  }), [isDemoMode, demoProjects, demoInvoices, demoCurrency, updateDemoInvoice, deleteDemoInvoice, updateDemoProject, deleteDemoProject, startDemo, stopDemo]);
 
   return (
     <DemoDataContext.Provider value={value}>

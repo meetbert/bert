@@ -32,7 +32,7 @@ const InvoiceDetail = () => {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const { baseCurrency } = useUserSettings();
   const { rates } = useExchangeRates(baseCurrency);
-  const { isDemoMode, demoInvoices, demoProjects, demoCategories } = useDemoData();
+  const { isDemoMode, demoInvoices, demoProjects, demoCategories, updateDemoInvoice, deleteDemoInvoice } = useDemoData();
 
   const fetchInvoice = async () => {
     if (!id) { setLoading(false); return; }
@@ -131,6 +131,13 @@ const InvoiceDetail = () => {
 
   const saveEdit = async () => {
     if (!invoice) return;
+    if (isDemoMode && invoice.id.startsWith('demo-')) {
+      updateDemoInvoice(invoice.id, editData);
+      setInvoice((prev) => prev ? { ...prev, ...editData } : prev);
+      setEditing(false);
+      toast({ title: 'Saved' });
+      return;
+    }
     const { error } = await supabase.from('invoices').update(editData).eq('id', invoice.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setEditing(false);
@@ -140,6 +147,12 @@ const InvoiceDetail = () => {
 
   const handleDelete = async () => {
     if (!invoice) return;
+    if (isDemoMode && invoice.id.startsWith('demo-')) {
+      deleteDemoInvoice(invoice.id);
+      toast({ title: 'Invoice deleted' });
+      navigate('/invoices');
+      return;
+    }
     const { error } = await supabase.from('invoices').delete().eq('id', invoice.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     toast({ title: 'Invoice deleted' });

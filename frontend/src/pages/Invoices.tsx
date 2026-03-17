@@ -29,7 +29,7 @@ const Invoices = () => {
   const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);
   const [rawProjects, setRawProjects] = useState<Project[]>([]);
   const [rawCategories, setRawCategories] = useState<Category[]>([]);
-  const { isDemoMode, demoInvoices, demoProjects, demoCategories } = useDemoData();
+  const { isDemoMode, demoInvoices, demoProjects, demoCategories, updateDemoInvoice } = useDemoData();
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterProject, setFilterProject] = useState('all');
@@ -130,6 +130,11 @@ const Invoices = () => {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
 
   const changeStatus = async (inv: Invoice, newStatus: string) => {
+    if (isDemoMode && inv.id.startsWith('demo-')) {
+      updateDemoInvoice(inv.id, { payment_status: newStatus as any });
+      toast({ title: `Marked as ${newStatus}` });
+      return;
+    }
     const { error } = await supabase.from('invoices').update({ payment_status: newStatus }).eq('id', inv.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setRawInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
@@ -137,9 +142,14 @@ const Invoices = () => {
   };
 
   const assignProject = async (invoiceId: string, projectId: string) => {
+    const proj = projects.find(p => p.id === projectId);
+    if (isDemoMode && invoiceId.startsWith('demo-')) {
+      updateDemoInvoice(invoiceId, { project_id: projectId, project: proj ?? null } as any);
+      toast({ title: 'Project assigned' });
+      return;
+    }
     const { error } = await supabase.from('invoices').update({ project_id: projectId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    const proj = projects.find(p => p.id === projectId);
     const inv = rawInvoices.find(i => i.id === invoiceId);
     setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, project_id: projectId, project: proj ?? null } as any : i));
     toast({ title: 'Project assigned' });
@@ -153,9 +163,14 @@ const Invoices = () => {
   };
 
   const assignCategory = async (invoiceId: string, categoryId: string) => {
+    const cat = categories.find(c => c.id === categoryId);
+    if (isDemoMode && invoiceId.startsWith('demo-')) {
+      updateDemoInvoice(invoiceId, { category_id: categoryId, category: cat ?? null } as any);
+      toast({ title: 'Category assigned' });
+      return;
+    }
     const { error } = await supabase.from('invoices').update({ category_id: categoryId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    const cat = categories.find(c => c.id === categoryId);
     const inv = rawInvoices.find(i => i.id === invoiceId);
     setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
     toast({ title: 'Category assigned' });
@@ -168,6 +183,11 @@ const Invoices = () => {
   };
 
   const unassignCategory = async (invoiceId: string) => {
+    if (isDemoMode && invoiceId.startsWith('demo-')) {
+      updateDemoInvoice(invoiceId, { category_id: null, category: null } as any);
+      toast({ title: 'Category removed' });
+      return;
+    }
     const { error } = await supabase.from('invoices').update({ category_id: null }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: null, category: null } as any : i));
@@ -175,6 +195,11 @@ const Invoices = () => {
   };
 
   const unassignProject = async (invoiceId: string) => {
+    if (isDemoMode && invoiceId.startsWith('demo-')) {
+      updateDemoInvoice(invoiceId, { project_id: null, project: null } as any);
+      toast({ title: 'Project removed' });
+      return;
+    }
     const { error } = await supabase.from('invoices').update({ project_id: null }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, project_id: null, project: null } as any : i));

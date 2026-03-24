@@ -98,6 +98,63 @@ def create_get_tools(user_id: str) -> list:
         return result.data
 
     @tool
+    def search_invoices(
+        vendor_name: str = "",
+        keyword: str = "",
+        payment_status: str = "",
+        date_from: str = "",
+        date_to: str = "",
+    ) -> list[dict]:
+        """Search invoices with optional filters. All parameters are optional.
+        vendor_name: partial match on vendor name (e.g. 'Tom Brown').
+        keyword: search term matched against description and line items (e.g. 'paint', 'camera').
+        payment_status: filter by status — 'unpaid', 'paid', or 'overdue'.
+        date_from / date_to: YYYY-MM-DD, filter by invoice_date (e.g. last month).
+        Returns matching invoices sorted newest-first, including id, vendor_name, total,
+        invoice_date, due_date, currency, invoice_number, payment_status, project_id."""
+        query = (
+            supabase.table("invoices")
+            .select("id, vendor_name, total, invoice_date, due_date, currency, invoice_number, payment_status, project_id, description, line_items")
+            .eq("user_id", user_id)
+        )
+        if vendor_name:
+            query = query.ilike("vendor_name", f"%{vendor_name}%")
+        if payment_status:
+            query = query.eq("payment_status", payment_status)
+        if date_from:
+            query = query.gte("invoice_date", date_from)
+        if date_to:
+            query = query.lte("invoice_date", date_to)
+        result = query.order("invoice_date", desc=True).execute()
+        invoices = result.data or []
+
+        if keyword:
+            kw = keyword.lower()
+            invoices = [
+                inv for inv in invoices
+                if kw in str(inv.get("description") or "").lower()
+                or kw in str(inv.get("line_items") or "").lower()
+            ]
+
+        return invoices
+
+    @tool
+    def get_invoices_by_project(project_id: str, payment_status: str = "") -> list[dict]:
+        """Get all invoices for a specific project UUID.
+        Optionally filter by payment_status ('unpaid', 'paid', 'overdue').
+        Returns id, vendor_name, total, invoice_date, currency, invoice_number, payment_status."""
+        query = (
+            supabase.table("invoices")
+            .select("id, vendor_name, total, invoice_date, due_date, currency, invoice_number, payment_status")
+            .eq("user_id", user_id)
+            .eq("project_id", project_id)
+        )
+        if payment_status:
+            query = query.eq("payment_status", payment_status)
+        result = query.order("invoice_date", desc=True).execute()
+        return result.data or []
+
+    @tool
     def get_project_documents(project_id: str) -> list[dict]:
         """List all onboarding documents (briefs, budgets, scripts) uploaded
         for a project. Use these to understand project context when deciding
@@ -216,6 +273,8 @@ def create_get_tools(user_id: str) -> list:
     return [
         get_invoice,
         get_invoices_by_vendor,
+        search_invoices,
+        get_invoices_by_project,
         get_projects,
         get_categories,
         get_project_documents,

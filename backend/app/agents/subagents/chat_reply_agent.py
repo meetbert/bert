@@ -12,8 +12,15 @@ from app.agents.prompts.chat_reply_prompt import CHAT_REPLY_SYSTEM
 from app.agents.tools.get_tools import create_get_tools
 
 
-CHAT_REPLY_TOOLS = {"get_invoice", "get_invoices_by_vendor", "get_projects", "get_categories"}
-_MAX_ITERATIONS = 5
+CHAT_REPLY_TOOLS = {
+    "get_invoice",
+    "get_invoices_by_vendor",
+    "search_invoices",
+    "get_invoices_by_project",
+    "get_projects",
+    "get_categories",
+}
+_MAX_ITERATIONS = 8
 
 
 def _select_tools(user_id: str) -> list:

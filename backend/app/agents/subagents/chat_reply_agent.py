@@ -18,6 +18,9 @@ CHAT_REPLY_TOOLS = {
     "search_invoices",
     "get_invoices_by_project",
     "get_vendor_summary",
+    "get_spend_summary",
+    "get_due_soon",
+    "get_project_spend",
     "get_projects",
     "get_categories",
 }

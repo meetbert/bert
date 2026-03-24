@@ -7,7 +7,8 @@ Note: Tool docstrings are sent to the LLM as tool descriptions.
       Keep them concise and written for the model, not developers.
 """
 
-from datetime import datetime, timezone
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
 from langchain_core.tools import tool
 
@@ -196,6 +197,135 @@ def create_get_tools(user_id: str) -> list:
         }
 
     @tool
+    def get_spend_summary(date_from: str = "", date_to: str = "") -> dict:
+        """Summarise total spend across all invoices in a date range.
+        date_from / date_to: YYYY-MM-DD. Leave blank for all time.
+        Returns total_spend, total_paid, total_outstanding, spend_by_project
+        (list of project name + total), and top_vendors (top 5 by spend).
+        Use this for questions like 'what did I spend last month?' or 'how much have I spent this year?'"""
+        query = (
+            supabase.table("invoices")
+            .select("total, payment_status, project_id, vendor_name")
+            .eq("user_id", user_id)
+        )
+        if date_from:
+            query = query.gte("invoice_date", date_from)
+        if date_to:
+            query = query.lte("invoice_date", date_to)
+        result = query.execute()
+        invoices = result.data or []
+
+        if not invoices:
+            return {"found": False, "total_spend": 0}
+
+        total_spend = sum(float(inv.get("total") or 0) for inv in invoices)
+        total_paid = sum(float(inv.get("total") or 0) for inv in invoices if inv.get("payment_status") == "paid")
+        total_outstanding = sum(float(inv.get("total") or 0) for inv in invoices if inv.get("payment_status") in ("unpaid", "overdue"))
+
+        # Spend by project
+        project_ids = list({inv["project_id"] for inv in invoices if inv.get("project_id")})
+        project_names: dict[str, str] = {}
+        if project_ids:
+            proj_result = (
+                supabase.table("projects")
+                .select("id, name")
+                .in_("id", project_ids)
+                .execute()
+            )
+            project_names = {p["id"]: p["name"] for p in (proj_result.data or [])}
+
+        by_project: dict[str, float] = defaultdict(float)
+        for inv in invoices:
+            pid = inv.get("project_id")
+            name = project_names.get(pid, "Unassigned") if pid else "Unassigned"
+            by_project[name] += float(inv.get("total") or 0)
+
+        # Top vendors
+        by_vendor: dict[str, float] = defaultdict(float)
+        for inv in invoices:
+            vendor = inv.get("vendor_name") or "Unknown"
+            by_vendor[vendor] += float(inv.get("total") or 0)
+        top_vendors = sorted(by_vendor.items(), key=lambda x: x[1], reverse=True)[:5]
+
+        return {
+            "found": True,
+            "invoice_count": len(invoices),
+            "total_spend": total_spend,
+            "total_paid": total_paid,
+            "total_outstanding": total_outstanding,
+            "spend_by_project": [{"project": k, "total": v} for k, v in sorted(by_project.items(), key=lambda x: x[1], reverse=True)],
+            "top_vendors": [{"vendor": k, "total": v} for k, v in top_vendors],
+        }
+
+    @tool
+    def get_due_soon(days: int = 7) -> dict:
+        """Get all unpaid and overdue invoices due within the next N days (default 7).
+        Use this for 'what do I need to pay this week/month?' or 'what's coming up?'
+        Returns a list of invoices with vendor, total, due_date, and payment_status,
+        plus a grand total of what's owed."""
+        today = datetime.now(timezone.utc).date()
+        cutoff = today + timedelta(days=days)
+        result = (
+            supabase.table("invoices")
+            .select("id, vendor_name, total, due_date, currency, invoice_number, payment_status, project_id")
+            .eq("user_id", user_id)
+            .in_("payment_status", ["unpaid", "overdue"])
+            .lte("due_date", cutoff.isoformat())
+            .order("due_date")
+            .execute()
+        )
+        invoices = result.data or []
+        total_due = sum(float(inv.get("total") or 0) for inv in invoices)
+        return {
+            "days_window": days,
+            "invoice_count": len(invoices),
+            "total_due": total_due,
+            "invoices": invoices,
+        }
+
+    @tool
+    def get_project_spend(project_id: str) -> dict:
+        """Get budget vs actual spend for a project.
+        Returns project name, budget, total_invoiced, total_paid, total_outstanding,
+        and whether the project is over budget.
+        Use this for 'am I over budget on X?' or 'what did project X cost in total?'"""
+        proj_result = (
+            supabase.table("projects")
+            .select("id, name, budget, status")
+            .eq("id", project_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        project = proj_result.data[0] if proj_result.data else None
+        if not project:
+            return {"error": "Project not found"}
+
+        inv_result = (
+            supabase.table("invoices")
+            .select("total, payment_status")
+            .eq("user_id", user_id)
+            .eq("project_id", project_id)
+            .execute()
+        )
+        invoices = inv_result.data or []
+
+        total_invoiced = sum(float(inv.get("total") or 0) for inv in invoices)
+        total_paid = sum(float(inv.get("total") or 0) for inv in invoices if inv.get("payment_status") == "paid")
+        total_outstanding = sum(float(inv.get("total") or 0) for inv in invoices if inv.get("payment_status") in ("unpaid", "overdue"))
+        budget = float(project.get("budget") or 0)
+
+        return {
+            "project_name": project["name"],
+            "budget": budget,
+            "total_invoiced": total_invoiced,
+            "total_paid": total_paid,
+            "total_outstanding": total_outstanding,
+            "remaining_budget": budget - total_invoiced,
+            "over_budget": total_invoiced > budget if budget > 0 else False,
+            "invoice_count": len(invoices),
+        }
+
+    @tool
     def get_project_documents(project_id: str) -> list[dict]:
         """List all onboarding documents (briefs, budgets, scripts) uploaded
         for a project. Use these to understand project context when deciding
@@ -317,6 +447,9 @@ def create_get_tools(user_id: str) -> list:
         search_invoices,
         get_invoices_by_project,
         get_vendor_summary,
+        get_spend_summary,
+        get_due_soon,
+        get_project_spend,
         get_projects,
         get_categories,
         get_project_documents,

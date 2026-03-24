@@ -575,6 +575,37 @@ def create_action_tools(user_id: str) -> list:
 
         return invoice
 
+    # ---- create_project -------------------------------------------------
+
+    @tool
+    def create_project(
+        name: str,
+        budget: float | None = None,
+        description: str | None = None,
+    ) -> dict:
+        """Create a new project for the user.
+
+        Use this when the user asks to create a new project, e.g.
+        'create a project called Brighton Shoot with a £20k budget'.
+        Returns the created project including its id.
+        """
+        row = {
+            "user_id": user_id,
+            "name": name,
+            "status": "Active",
+        }
+        if budget is not None:
+            row["budget"] = budget
+        if description:
+            row["description"] = description
+
+        result = (
+            supabase.table("projects")
+            .insert(row)
+            .execute()
+        )
+        return result.data[0]
+
     # ---- send_reply -----------------------------------------------------
 
     @tool
@@ -639,5 +670,6 @@ def create_action_tools(user_id: str) -> list:
         create_invoice,
         update_invoice,
         assign_invoice,
+        create_project,
         send_reply,
     ]

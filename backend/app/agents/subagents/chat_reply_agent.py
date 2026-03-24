@@ -9,10 +9,12 @@ from langsmith import traceable
 
 from app.agents.config import get_llm
 from app.agents.prompts.chat_reply_prompt import CHAT_REPLY_SYSTEM
+from app.agents.tools.action_tools import create_action_tools
 from app.agents.tools.get_tools import create_get_tools
 
 
 CHAT_REPLY_TOOLS = {
+    # Read tools
     "get_invoice",
     "get_invoices_by_vendor",
     "search_invoices",
@@ -23,13 +25,17 @@ CHAT_REPLY_TOOLS = {
     "get_project_spend",
     "get_projects",
     "get_categories",
+    # Write tools
+    "update_invoice",
+    "assign_invoice",
+    "create_project",
 }
-_MAX_ITERATIONS = 8
+_MAX_ITERATIONS = 10
 
 
 def _select_tools(user_id: str) -> list:
-    """Return read-only tools for answering questions and looking up details."""
-    all_tools = create_get_tools(user_id)
+    """Return tools for answering questions and handling chat commands."""
+    all_tools = create_get_tools(user_id) + create_action_tools(user_id)
     return [t for t in all_tools if t.name in CHAT_REPLY_TOOLS]
 
 

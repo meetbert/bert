@@ -155,6 +155,47 @@ def create_get_tools(user_id: str) -> list:
         return result.data or []
 
     @tool
+    def get_vendor_summary(vendor_name: str) -> dict:
+        """Get a financial summary for a vendor — total invoiced, total paid, and total outstanding.
+        Use this when the user asks how much they owe a vendor, or for an overview of a vendor relationship.
+        vendor_name: partial match (e.g. 'Tom Brown', 'Arri')."""
+        result = (
+            supabase.table("invoices")
+            .select("id, invoice_number, total, payment_status, invoice_date, currency")
+            .eq("user_id", user_id)
+            .ilike("vendor_name", f"%{vendor_name}%")
+            .order("invoice_date", desc=True)
+            .execute()
+        )
+        invoices = result.data or []
+        if not invoices:
+            return {"found": False, "vendor_name": vendor_name}
+
+        total_invoiced = sum(float(inv.get("total") or 0) for inv in invoices)
+        total_paid = sum(float(inv.get("total") or 0) for inv in invoices if inv.get("payment_status") == "paid")
+        total_outstanding = sum(float(inv.get("total") or 0) for inv in invoices if inv.get("payment_status") in ("unpaid", "overdue"))
+
+        return {
+            "found": True,
+            "vendor_name": vendor_name,
+            "invoice_count": len(invoices),
+            "total_invoiced": total_invoiced,
+            "total_paid": total_paid,
+            "total_outstanding": total_outstanding,
+            "invoices": [
+                {
+                    "id": inv["id"],
+                    "invoice_number": inv.get("invoice_number"),
+                    "total": inv.get("total"),
+                    "payment_status": inv.get("payment_status"),
+                    "invoice_date": inv.get("invoice_date"),
+                    "currency": inv.get("currency"),
+                }
+                for inv in invoices
+            ],
+        }
+
+    @tool
     def get_project_documents(project_id: str) -> list[dict]:
         """List all onboarding documents (briefs, budgets, scripts) uploaded
         for a project. Use these to understand project context when deciding
@@ -275,6 +316,7 @@ def create_get_tools(user_id: str) -> list:
         get_invoices_by_vendor,
         search_invoices,
         get_invoices_by_project,
+        get_vendor_summary,
         get_projects,
         get_categories,
         get_project_documents,

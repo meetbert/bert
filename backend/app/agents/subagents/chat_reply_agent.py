@@ -17,6 +17,7 @@ CHAT_REPLY_TOOLS = {
     "get_invoices_by_vendor",
     "search_invoices",
     "get_invoices_by_project",
+    "get_vendor_summary",
     "get_projects",
     "get_categories",
 }

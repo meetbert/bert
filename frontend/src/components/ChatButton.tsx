@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Send, X, Paperclip, FileText, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,33 @@ type Message = { role: 'user' | 'assistant'; text: string };
 
 const PANEL_WIDTH = 'sm:w-[400px]';
 
+const LINK_RE = /\[([^\]]+)\]\((\/[^)]+)\)/g;
+
+function renderText(text: string, navigate: (path: string) => void): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  LINK_RE.lastIndex = 0;
+  while ((match = LINK_RE.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    const [, label, href] = match;
+    parts.push(
+      <button
+        key={match.index}
+        onClick={() => navigate(href)}
+        className="underline text-primary hover:opacity-80"
+      >
+        {label}
+      </button>
+    );
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
 export const ChatButton = () => {
+  const navigate = useNavigate();
   const { session, user } = useAuth();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -165,7 +192,7 @@ export const ChatButton = () => {
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-secondary text-secondary-foreground'
               }`}>
-                {m.text}
+                {renderText(m.text, navigate)}
               </div>
             </div>
           ))}

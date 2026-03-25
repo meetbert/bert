@@ -93,7 +93,7 @@ export const ChatButton = () => {
       await supabase.from('chat_messages').delete().eq('user_id', userId);
     }
     setMessages([
-      { role: 'assistant', text: 'Hey, I'm Bert. Ask me about your spend, invoices, or projects — or upload a document to get started.' },
+      { role: 'assistant', text: "Hey, I'm Bert. Ask me about your spend, invoices, or projects — or upload a document to get started." },
     ]);
   };
 

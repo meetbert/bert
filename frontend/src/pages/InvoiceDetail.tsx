@@ -180,18 +180,18 @@ const InvoiceDetail = () => {
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold">{invoice.vendor_name}</h1>
-              <StatusDropdown
-                status={invoice.payment_status === 'overdue' ? 'unpaid' : invoice.payment_status}
-                onChangeStatus={handleStatusChange}
-              />
-            </div>
+            <h1 className="text-3xl font-bold">{invoice.vendor_name}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               #{invoice.invoice_number} &middot; {invoice.invoice_date} &middot; {invoice.currency}
             </p>
           </div>
-          <Button variant="destructive" size="sm" onClick={() => setShowDeleteModal(true)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Delete</Button>
+          <div className="flex items-center gap-2">
+            <StatusDropdown
+              status={invoice.payment_status === 'overdue' ? 'unpaid' : invoice.payment_status}
+              onChangeStatus={handleStatusChange}
+            />
+            <Button variant="destructive" size="sm" onClick={() => setShowDeleteModal(true)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Delete</Button>
+          </div>
         </div>
 
         {/* Details (left) + Activity (right) */}

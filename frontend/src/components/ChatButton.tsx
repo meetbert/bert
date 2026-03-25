@@ -66,7 +66,7 @@ export const ChatButton = () => {
         setMessages(data.map((m: any) => ({ role: m.role, text: m.content })));
       } else {
         setMessages([
-          { role: 'assistant', text: 'Hi! I can help you process invoices. Attach a PDF or image to get started, or ask a question.' },
+          { role: 'assistant', text: 'Hey, I'm Bert. Ask me about your spend, invoices, or projects — or upload a document to get started.' },
         ]);
       }
       setHistoryLoaded(true);
@@ -93,7 +93,7 @@ export const ChatButton = () => {
       await supabase.from('chat_messages').delete().eq('user_id', userId);
     }
     setMessages([
-      { role: 'assistant', text: 'Hi! I can help you process invoices. Attach a PDF or image to get started, or ask a question.' },
+      { role: 'assistant', text: 'Hey, I'm Bert. Ask me about your spend, invoices, or projects — or upload a document to get started.' },
     ]);
   };
 

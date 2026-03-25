@@ -66,7 +66,7 @@ export const ChatButton = () => {
         setMessages(data.map((m: any) => ({ role: m.role, text: m.content })));
       } else {
         setMessages([
-          { role: 'assistant', text: 'Hey, I'm Bert. Ask me about your spend, invoices, or projects — or upload a document to get started.' },
+          { role: 'assistant', text: "Hey, I'm Bert. Ask me about your spend, invoices, or projects — or upload a document to get started." },
         ]);
       }
       setHistoryLoaded(true);

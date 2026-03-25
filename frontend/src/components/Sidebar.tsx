@@ -132,7 +132,7 @@ export const Sidebar = () => {
       <button
         onClick={toggle}
         className="fixed top-1/2 -translate-y-1/2 w-8 h-8 bg-white border-2 border-gray-300 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-50"
-        style={{ left: collapsed ? '48px' : '240px' }}
+        style={{ left: collapsed ? '48px' : `${EXPANDED_WIDTH - 16}px` }}
       >
         {collapsed
           ? <ChevronRight size={16} className="text-gray-600" />

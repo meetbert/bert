@@ -28,9 +28,14 @@ CHAT_REPLY_TOOLS = {
     # Write tools
     "update_invoice",
     "assign_invoice",
+    "bulk_update_invoices",
+    "delete_invoice",
     "create_project",
+    "update_project",
+    "set_vendor_mapping",
+    "send_chaser",
 }
-_MAX_ITERATIONS = 10
+_MAX_ITERATIONS = 12
 
 
 def _select_tools(user_id: str) -> list:

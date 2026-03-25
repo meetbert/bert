@@ -105,14 +105,18 @@ def create_get_tools(user_id: str) -> list:
         payment_status: str = "",
         date_from: str = "",
         date_to: str = "",
+        min_amount: float = 0,
+        max_amount: float = 0,
+        currency: str = "",
     ) -> list[dict]:
         """Search invoices with optional filters. All parameters are optional.
         vendor_name: partial match on vendor name (e.g. 'Tom Brown').
         keyword: search term matched against description and line items (e.g. 'paint', 'camera').
         payment_status: filter by status — 'unpaid', 'paid', or 'overdue'.
-        date_from / date_to: YYYY-MM-DD, filter by invoice_date (e.g. last month).
-        Returns matching invoices sorted newest-first, including id, vendor_name, total,
-        invoice_date, due_date, currency, invoice_number, payment_status, project_id."""
+        date_from / date_to: YYYY-MM-DD, filter by invoice_date.
+        min_amount / max_amount: filter by total amount (0 = no limit).
+        currency: 3-letter ISO code to filter by currency (e.g. 'GBP', 'USD').
+        Returns matching invoices sorted newest-first."""
         query = (
             supabase.table("invoices")
             .select("id, vendor_name, total, invoice_date, due_date, currency, invoice_number, payment_status, project_id, description, line_items")
@@ -126,6 +130,12 @@ def create_get_tools(user_id: str) -> list:
             query = query.gte("invoice_date", date_from)
         if date_to:
             query = query.lte("invoice_date", date_to)
+        if min_amount > 0:
+            query = query.gte("total", min_amount)
+        if max_amount > 0:
+            query = query.lte("total", max_amount)
+        if currency:
+            query = query.eq("currency", currency.upper())
         result = query.order("invoice_date", desc=True).execute()
         invoices = result.data or []
 
@@ -205,7 +215,7 @@ def create_get_tools(user_id: str) -> list:
         Use this for questions like 'what did I spend last month?' or 'how much have I spent this year?'"""
         query = (
             supabase.table("invoices")
-            .select("total, payment_status, project_id, vendor_name")
+            .select("total, payment_status, project_id, vendor_name, currency")
             .eq("user_id", user_id)
         )
         if date_from:
@@ -247,6 +257,12 @@ def create_get_tools(user_id: str) -> list:
             by_vendor[vendor] += float(inv.get("total") or 0)
         top_vendors = sorted(by_vendor.items(), key=lambda x: x[1], reverse=True)[:5]
 
+        # Spend by currency
+        by_currency: dict[str, float] = defaultdict(float)
+        for inv in invoices:
+            curr = inv.get("currency") or "Unknown"
+            by_currency[curr] += float(inv.get("total") or 0)
+
         return {
             "found": True,
             "invoice_count": len(invoices),
@@ -255,6 +271,7 @@ def create_get_tools(user_id: str) -> list:
             "total_outstanding": total_outstanding,
             "spend_by_project": [{"project": k, "total": v} for k, v in sorted(by_project.items(), key=lambda x: x[1], reverse=True)],
             "top_vendors": [{"vendor": k, "total": v} for k, v in top_vendors],
+            "spend_by_currency": [{"currency": k, "total": v} for k, v in sorted(by_currency.items(), key=lambda x: x[1], reverse=True)],
         }
 
     @tool

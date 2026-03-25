@@ -136,9 +136,10 @@ const InvoiceDetail = () => {
   };
 
   const activityLog = invoice ? [
-    { date: invoice.created_at ?? invoice.invoice_date ?? '—', text: 'Invoice created' },
-    ...(invoice.payment_status === 'paid' ? [{ date: new Date().toISOString().slice(0, 10), text: 'Marked as paid' }] : []),
-    ...(invoice.project_id ? [{ date: new Date().toISOString().slice(0, 10), text: 'Assigned to project' }] : []),
+    { date: invoice.created_at, text: 'Invoice created' },
+    ...(invoice.payment_status === 'paid' && invoice.updated_at && invoice.updated_at !== invoice.created_at
+      ? [{ date: invoice.updated_at, text: 'Marked as paid' }]
+      : []),
   ] : [];
 
   const docPath = invoice?.document_path?.toLowerCase() ?? '';

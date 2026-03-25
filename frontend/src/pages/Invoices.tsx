@@ -5,6 +5,7 @@ import { Invoice, Project, Category } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { StatusDropdown } from '@/components/StatusDropdown';
 import { ImportModal } from '@/components/ImportModal';
+import { CreateInvoiceDialog } from '@/components/CreateInvoiceDialog';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EmptyState } from '@/components/EmptyState';
 import { toast } from '@/hooks/use-toast';
-import { Search, Download, ChevronLeft, ChevronRight, FileText, Archive, Upload, AlertCircle } from 'lucide-react';
+import { Search, Download, ChevronLeft, ChevronRight, FileText, Archive, Upload, AlertCircle, Plus } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
@@ -26,6 +27,7 @@ const Invoices = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [showImport, setShowImport] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
   const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);
   const [rawProjects, setRawProjects] = useState<Project[]>([]);
   const [rawCategories, setRawCategories] = useState<Category[]>([]);
@@ -219,6 +221,9 @@ const Invoices = () => {
             ))}
           </div>
           <div className="ml-auto flex gap-2">
+            <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              <Plus className="h-4 w-4" /> New Invoice
+            </button>
             <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm font-medium transition-colors hover:bg-secondary">
               <Upload className="h-4 w-4" /> Import
             </button>
@@ -383,6 +388,14 @@ const Invoices = () => {
         open={showImport}
         onClose={() => setShowImport(false)}
         onImported={fetchData}
+      />
+      <CreateInvoiceDialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreated={fetchData}
+        projects={projects}
+        categories={categories}
+        defaultCurrency={baseCurrency}
       />
     </div>
   );

@@ -5,7 +5,7 @@ import { LayoutDashboard, FolderOpen, FileText, ChevronLeft, ChevronRight, Setti
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 const SIDEBAR_KEY = 'sidebar-collapsed';
-const EXPANDED_WIDTH = 256;
+const EXPANDED_WIDTH = 220;
 const COLLAPSED_WIDTH = 64;
 
 const navItems = [
@@ -54,7 +54,7 @@ export const Sidebar = () => {
   return (
     <>
       <aside
-        className={`fixed top-0 left-0 h-screen bg-white border-r border-border flex flex-col transition-all duration-300 z-40 ${collapsed ? 'w-16' : 'w-64'}`}
+        className={`fixed top-0 left-0 h-screen bg-white border-r border-border flex flex-col transition-all duration-300 z-40 ${collapsed ? 'w-16' : 'w-[220px]'}`}
       >
         {/* Header */}
         <div className="p-3 border-b border-border shrink-0">

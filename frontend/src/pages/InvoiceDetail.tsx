@@ -15,6 +15,7 @@ import { formatCurrency, convertToBase, SUPPORTED_CURRENCIES } from '@/lib/curre
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { ArrowLeft, Pencil, Check, X, Download, Trash2, Clock, FileText } from 'lucide-react';
+import { StatusDropdown } from '@/components/StatusDropdown';
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -135,6 +136,14 @@ const InvoiceDetail = () => {
     navigate('/invoices');
   };
 
+  const handleStatusChange = async (newStatus: string) => {
+    if (!invoice) return;
+    const { error } = await supabase.from('invoices').update({ payment_status: newStatus }).eq('id', invoice.id);
+    if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    setInvoice((prev) => prev ? { ...prev, payment_status: newStatus as any } : prev);
+    toast({ title: `Marked as ${newStatus}` });
+  };
+
   const activityLog = invoice ? [
     { date: invoice.created_at, text: 'Invoice created' },
     ...(invoice.payment_status === 'paid' && invoice.updated_at && invoice.updated_at !== invoice.created_at
@@ -176,7 +185,13 @@ const InvoiceDetail = () => {
               #{invoice.invoice_number} &middot; {invoice.invoice_date} &middot; {invoice.currency}
             </p>
           </div>
-          <Button variant="destructive" size="sm" onClick={() => setShowDeleteModal(true)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Delete</Button>
+          <div className="flex items-center gap-2">
+            <StatusDropdown
+              status={invoice.payment_status === 'overdue' ? 'unpaid' : invoice.payment_status}
+              onChangeStatus={handleStatusChange}
+            />
+            <Button variant="destructive" size="sm" onClick={() => setShowDeleteModal(true)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Delete</Button>
+          </div>
         </div>
 
         {/* Details (left) + Activity (right) */}

@@ -146,6 +146,7 @@ export const ChatButton = () => {
   }, [demoMessages, demoLoading]);
 
   if (!user && !isDemoMode) return null;
+  if (location.pathname === '/') return null;
 
   // ── Demo mode: interactive mock chat ──────────────────────────────────────
   if (isDemoMode) {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { MessageCircle, Send, X, Paperclip, FileText, Loader2, Trash2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -81,6 +81,7 @@ function getDemoResponse(text: string): string {
 
 export const ChatButton = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { session, user } = useAuth();
   const { isDemoMode } = useDemoData();
   const [open, setOpen] = useState(false);
@@ -131,6 +132,10 @@ export const ChatButton = () => {
     wrapper?.classList.toggle('chat-open', open);
     return () => wrapper?.classList.remove('chat-open');
   }, [open]);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

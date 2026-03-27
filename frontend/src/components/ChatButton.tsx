@@ -134,7 +134,7 @@ export const ChatButton = () => {
   }, [open]);
 
   useEffect(() => {
-    setOpen(false);
+    if (location.pathname === '/') setOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {

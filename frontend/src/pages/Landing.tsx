@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useDemoData } from '@/contexts/DemoDataContext';
 import { supabase } from '@/lib/supabase';
 import { resolvePostAuthRoute } from '@/lib/authRouting';
+import { LandingChat } from '@/components/LandingChat';
 import { useWalkthrough } from '@/contexts/WalkthroughContext';
 import { Mail, BarChart3, AlertTriangle, MessageSquare, ArrowRight } from 'lucide-react';
 
@@ -155,6 +156,7 @@ const Landing = () => {
         <p>© Bert. 2026</p>
       </footer>
 
+      <LandingChat />
     </div>
   );
 };

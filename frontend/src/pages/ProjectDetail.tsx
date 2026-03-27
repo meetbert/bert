@@ -20,6 +20,7 @@ import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { FileText, DollarSign, Target, AlertCircle, ArrowLeft, Pencil, Trash2, ExternalLink, ImageIcon } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
 import { ProjectEditDialog } from '@/components/ProjectEditDialog';
+import { useDemoData } from '@/contexts/DemoDataContext';
 
 const COLORS = ['hsl(0,100%,65%)', 'hsl(0,0%,20%)', 'hsl(0,0%,45%)', 'hsl(0,0%,70%)', 'hsl(0,0%,85%)', 'hsl(38,92%,50%)'];
 
@@ -27,6 +28,7 @@ const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { baseCurrency } = useUserSettings();
+  const { isDemoMode, demoProjects, demoInvoices, demoCategories, demoProjectCategories, demoProjectDocs, updateDemoInvoice, updateDemoProject, deleteDemoProject } = useDemoData();
   const { rates } = useExchangeRates(baseCurrency);
   const [project, setProject] = useState<Project | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -42,6 +44,25 @@ const ProjectDetail = () => {
 
   const fetchData = () => {
     if (!id) return;
+
+    if (isDemoMode && id.startsWith('demo-')) {
+      const proj = demoProjects.find(p => p.id === id) ?? null;
+      setProject(proj);
+      const today = new Date().toISOString().split('T')[0];
+      const invs = demoInvoices.filter(i => i.project_id === id).map(inv => {
+        let status = inv.payment_status;
+        if (status === 'unpaid' && inv.due_date && inv.due_date < today) status = 'overdue';
+        return { ...inv, payment_status: status };
+      });
+      setInvoices(invs as Invoice[]);
+      setCategories(demoCategories);
+      const projCatIds = new Set(demoProjectCategories.filter(pc => pc.project_id === id).map(pc => pc.category_id));
+      setAssignableCategories(projCatIds.size > 0 ? demoCategories.filter(c => projCatIds.has(c.id)) : demoCategories);
+      setDocs(demoProjectDocs.filter(d => d.project_id === id).map(d => ({ id: d.id, file_name: d.file_name, storage_path: '', signedUrl: d.signedUrl })));
+      setLoading(false);
+      return;
+    }
+
     Promise.all([
       supabase.from('projects').select('*').eq('id', id).single(),
       supabase.from('invoices').select('*, category:invoice_categories(*)').eq('project_id', id),
@@ -83,26 +104,43 @@ const ProjectDetail = () => {
     setViewingDoc({ url: doc.signedUrl, name: doc.file_name });
   };
 
-  useEffect(() => { fetchData(); }, [id]);
+  useEffect(() => { fetchData(); }, [id, demoProjectDocs]);
 
   const assignCategory = async (invoiceId: string, categoryId: string) => {
+    const cat = categories.find(c => c.id === categoryId);
+    if (isDemoMode && invoiceId.startsWith('demo-')) {
+      updateDemoInvoice(invoiceId, { category_id: categoryId, category: cat ?? null } as any);
+      setInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
+      toast({ title: 'Category assigned' });
+      return;
+    }
     const { error } = await supabase.from('invoices').update({ category_id: categoryId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    const cat = categories.find(c => c.id === categoryId);
     setInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: categoryId, category: cat ?? null } as any : i));
     toast({ title: 'Category assigned' });
   };
 
   const changeInvoiceStatus = async (inv: Invoice, newStatus: string) => {
+    if (isDemoMode && inv.id.startsWith('demo-')) {
+      updateDemoInvoice(inv.id, { payment_status: newStatus as any });
+      setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
+      toast({ title: `Marked as ${newStatus}` });
+      return;
+    }
     const { error } = await supabase.from('invoices').update({ payment_status: newStatus }).eq('id', inv.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
     toast({ title: `Marked as ${newStatus}` });
   };
 
-
   const handleDelete = async () => {
     if (!id) return;
+    if (isDemoMode && id.startsWith('demo-')) {
+      deleteDemoProject(id);
+      toast({ title: 'Project deleted' });
+      navigate('/projects');
+      return;
+    }
     const { error } = await supabase.from('projects').delete().eq('id', id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     toast({ title: 'Project deleted' });
@@ -149,6 +187,12 @@ const ProjectDetail = () => {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold truncate max-w-md lg:max-w-xl">{project.name}</h1>
             <ProjectStatusDropdown status={project.status ?? 'Active'} onChangeStatus={async (s) => {
+              if (isDemoMode && id?.startsWith('demo-')) {
+                updateDemoProject(id!, { status: s });
+                setProject((prev) => prev ? { ...prev, status: s } : prev);
+                toast({ title: `Status changed to ${s}` });
+                return;
+              }
               const { error } = await supabase.from('projects').update({ status: s }).eq('id', id!);
               if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
               setProject((prev) => prev ? { ...prev, status: s } : prev);

@@ -20,7 +20,7 @@ const Settings = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { start: startWalkthrough } = useWalkthrough();
-  const { startDemo } = useDemoData();
+  const { isDemoMode, startDemo, stopDemo, demoCurrency, setDemoCurrency } = useDemoData();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -29,11 +29,11 @@ const Settings = () => {
   // Meetbert.uk inbox (read-only — assigned manually by admin)
   const [inboxAddress, setInboxAddress] = useState<string | null>(null);
 
-  // Currency
-  const [baseCurrency, setBaseCurrency] = useState('EUR');
+  // Currency — in demo mode, driven by DemoDataContext
+  const [baseCurrency, setBaseCurrency] = useState(() => isDemoMode ? demoCurrency : 'EUR');
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) { setLoading(false); return; }
 
     supabase
       .from('user_settings')
@@ -105,6 +105,7 @@ const Settings = () => {
             <p className="text-xs text-muted-foreground">All dashboard totals and KPIs will display in this currency.</p>
             <Select value={baseCurrency} onValueChange={async (v) => {
               setBaseCurrency(v);
+              if (isDemoMode) { setDemoCurrency(v); return; }
               if (!user) return;
               const { error } = await supabase.from('user_settings').upsert({ id: user.id, base_currency: v });
               if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -139,64 +140,77 @@ const Settings = () => {
           </CardContent>
         </Card>
 
-        {/* ── Account ─────────────────────────────────────────────────── */}
-        <Card>
-          <CardHeader><CardTitle className="text-sm">Account</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">{user?.email}</p>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={signOut}><LogOut className="mr-1 h-4 w-4" /> Logout</Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setDeleteOpen(true)}
-              >
-                <Trash2 className="mr-1 h-4 w-4" /> Delete Account
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* ── Account (hidden in demo) ─────────────────────────────── */}
+        {!isDemoMode && (
+          <>
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Account</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">{user?.email}</p>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={signOut}><LogOut className="mr-1 h-4 w-4" /> Logout</Button>
+                  <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+                    <Trash2 className="mr-1 h-4 w-4" /> Delete Account
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
-        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete your account?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete your account and all associated data including invoices, projects, and settings. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                disabled={deleting}
-                onClick={async (e) => {
-                  e.preventDefault();
-                  setDeleting(true);
-                  try {
-                    const { data: { session: s } } = await supabase.auth.getSession();
-                    const res = await supabase.functions.invoke('delete-account', {
-                      headers: { Authorization: `Bearer ${s?.access_token}` },
-                    });
-                    if (res.error || res.data?.error) {
-                      throw new Error(res.data?.error || res.error?.message || 'Failed');
-                    }
-                    await supabase.auth.signOut();
-                    navigate('/');
-                    toast({ title: 'Account deleted' });
-                  } catch (err: any) {
-                    toast({ title: 'Error', description: err.message, variant: 'destructive' });
-                  } finally {
-                    setDeleting(false);
-                    setDeleteOpen(false);
-                  }
-                }}
-              >
-                {deleting ? 'Deleting…' : 'Yes, delete my account'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+            <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete your account and all associated data including invoices, projects, and settings. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    disabled={deleting}
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      setDeleting(true);
+                      try {
+                        const { data: { session: s } } = await supabase.auth.getSession();
+                        const res = await supabase.functions.invoke('delete-account', {
+                          headers: { Authorization: `Bearer ${s?.access_token}` },
+                        });
+                        if (res.error || res.data?.error) {
+                          throw new Error(res.data?.error || res.error?.message || 'Failed');
+                        }
+                        await supabase.auth.signOut();
+                        navigate('/');
+                        toast({ title: 'Account deleted' });
+                      } catch (err: any) {
+                        toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                      } finally {
+                        setDeleting(false);
+                        setDeleteOpen(false);
+                      }
+                    }}
+                  >
+                    {deleting ? 'Deleting…' : 'Yes, delete my account'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        )}
+
+        {/* ── Exit demo ───────────────────────────────────────────────── */}
+        {isDemoMode && (
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Demo Mode</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">You're exploring Bert with sample data. Nothing you do here affects anyone else.</p>
+              <Button variant="outline" size="sm" onClick={() => { stopDemo(); navigate('/'); }}>
+                <LogOut className="mr-1 h-4 w-4" /> Exit demo
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
       </div>
     </div>

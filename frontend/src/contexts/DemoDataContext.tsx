@@ -8,8 +8,6 @@ const daysFromNow = (days: number) => {
   return d.toISOString().split('T')[0];
 };
 
-const today = () => new Date().toISOString().split('T')[0];
-
 // Stable IDs
 const P1 = 'demo-proj-atlantic';
 const P2 = 'demo-proj-wildcoast';
@@ -113,12 +111,94 @@ const DEMO_PROJECT_CATEGORIES = [
   { id: 'demo-pc-11', project_id: P3, category_id: C_AERIAL, budget: 10000, created_at: '' },
 ];
 
+type ProjectCategory = typeof DEMO_PROJECT_CATEGORIES[number];
+
+// ── Persistence helpers ────────────────────────────────────────────────────────
+
+const SS = {
+  flag:       'bert_demo',
+  projects:   'bert_demo_projects',
+  invoices:   'bert_demo_invoices',
+  categories: 'bert_demo_categories',
+  projCats:   'bert_demo_project_categories',
+  docs:       'bert_demo_docs',
+  currency:   'bert_demo_currency',
+};
+
+function ssGet<T>(key: string, fallback: T): T {
+  try {
+    const v = sessionStorage.getItem(key);
+    return v ? (JSON.parse(v) as T) : fallback;
+  } catch { return fallback; }
+}
+
+function ssSet(key: string, value: unknown) {
+  try { sessionStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+function ssClearDemo() {
+  Object.values(SS).forEach(k => sessionStorage.removeItem(k));
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Stored on disk as base64; converted to blob URL in memory
+interface StoredDoc {
+  id: string;
+  project_id: string;
+  file_name: string;
+  base64: string;
+  mimeType: string;
+}
+
+interface DemoDoc {
+  id: string;
+  project_id: string;
+  file_name: string;
+  signedUrl: string;
+}
+
+function storedDocToDemoDoc(sd: StoredDoc): DemoDoc {
+  try {
+    const [header, data] = sd.base64.split(',');
+    const mimeType = header?.match(/:(.*?);/)?.[1] ?? sd.mimeType;
+    const byteString = atob(data ?? sd.base64);
+    const arr = new Uint8Array(byteString.length);
+    for (let i = 0; i < byteString.length; i++) arr[i] = byteString.charCodeAt(i);
+    const blob = new Blob([arr], { type: mimeType });
+    return { id: sd.id, project_id: sd.project_id, file_name: sd.file_name, signedUrl: URL.createObjectURL(blob) };
+  } catch {
+    return { id: sd.id, project_id: sd.project_id, file_name: sd.file_name, signedUrl: '' };
+  }
+}
+
+// ── Context type ───────────────────────────────────────────────────────────────
+
 interface DemoDataContextType {
   isDemoMode: boolean;
   demoProjects: Project[];
   demoInvoices: Invoice[];
   demoCategories: Category[];
-  demoProjectCategories: typeof DEMO_PROJECT_CATEGORIES;
+  demoProjectCategories: ProjectCategory[];
+  demoProjectDocs: DemoDoc[];
+  demoCurrency: string;
+  setDemoCurrency: (c: string) => void;
+  updateDemoInvoice: (id: string, changes: Partial<Invoice>) => void;
+  deleteDemoInvoice: (id: string) => void;
+  updateDemoProject: (id: string, changes: Partial<Project>) => void;
+  deleteDemoProject: (id: string) => void;
+  addDemoProject: (project: Project) => void;
+  addDemoProjectCategories: (entries: Omit<ProjectCategory, 'id' | 'created_at'>[]) => void;
+  addDemoCategory: (name: string) => Category;
+  addDemoProjectDocs: (projectId: string, files: File[]) => Promise<void>;
+  addDemoInvoice: (invoice: Invoice) => void;
   startDemo: () => void;
   stopDemo: () => void;
 }
@@ -131,21 +211,174 @@ export const useDemoData = () => {
   return ctx;
 };
 
-export const DemoDataProvider = ({ children }: { children: React.ReactNode }) => {
-  const [isDemoMode, setIsDemoMode] = useState(false);
+// ── Provider ───────────────────────────────────────────────────────────────────
 
-  const startDemo = useCallback(() => setIsDemoMode(true), []);
-  const stopDemo = useCallback(() => setIsDemoMode(false), []);
+export const DemoDataProvider = ({ children }: { children: React.ReactNode }) => {
+  const isDemo = sessionStorage.getItem(SS.flag) === '1';
+
+  const [isDemoMode, setIsDemoMode] = useState(isDemo);
+
+  const [demoCurrencyState, setDemoCurrencyState] = useState<string>(
+    isDemo ? ssGet(SS.currency, 'EUR') : 'EUR'
+  );
+  const [demoInvoices, setDemoInvoicesState] = useState<Invoice[]>(
+    isDemo ? ssGet(SS.invoices, DEMO_INVOICES) : DEMO_INVOICES
+  );
+  const [demoProjects, setDemoProjectsState] = useState<Project[]>(
+    isDemo ? ssGet(SS.projects, DEMO_PROJECTS) : DEMO_PROJECTS
+  );
+  const [demoProjectCategories, setDemoProjectCategoriesState] = useState<ProjectCategory[]>(
+    isDemo ? ssGet(SS.projCats, DEMO_PROJECT_CATEGORIES) : DEMO_PROJECT_CATEGORIES
+  );
+  const [demoCategories, setDemoCategoriesState] = useState<Category[]>(
+    isDemo ? ssGet(SS.categories, DEMO_CATEGORIES) : DEMO_CATEGORIES
+  );
+  const [demoProjectDocs, setDemoProjectDocsState] = useState<DemoDoc[]>(() => {
+    if (!isDemo) return [];
+    return ssGet<StoredDoc[]>(SS.docs, []).map(storedDocToDemoDoc);
+  });
+
+  // Setters that also write through to sessionStorage
+  const setDemoCurrency = useCallback((c: string) => {
+    ssSet(SS.currency, c);
+    setDemoCurrencyState(c);
+  }, []);
+
+  const setDemoInvoices = useCallback((updater: (prev: Invoice[]) => Invoice[]) => {
+    setDemoInvoicesState(prev => {
+      const next = updater(prev);
+      ssSet(SS.invoices, next);
+      return next;
+    });
+  }, []);
+
+  const setDemoProjects = useCallback((updater: (prev: Project[]) => Project[]) => {
+    setDemoProjectsState(prev => {
+      const next = updater(prev);
+      ssSet(SS.projects, next);
+      return next;
+    });
+  }, []);
+
+  const setDemoProjectCategories = useCallback((updater: (prev: ProjectCategory[]) => ProjectCategory[]) => {
+    setDemoProjectCategoriesState(prev => {
+      const next = updater(prev);
+      ssSet(SS.projCats, next);
+      return next;
+    });
+  }, []);
+
+  const setDemoCategories = useCallback((updater: (prev: Category[]) => Category[]) => {
+    setDemoCategoriesState(prev => {
+      const next = updater(prev);
+      ssSet(SS.categories, next);
+      return next;
+    });
+  }, []);
+
+  // ── Demo lifecycle ─────────────────────────────────────────────────
+
+  const startDemo = useCallback(() => {
+    sessionStorage.setItem(SS.flag, '1');
+    setIsDemoMode(true);
+  }, []);
+
+  const stopDemo = useCallback(() => {
+    ssClearDemo();
+    setIsDemoMode(false);
+    setDemoCurrencyState('EUR');
+    setDemoInvoicesState(DEMO_INVOICES);
+    setDemoProjectsState(DEMO_PROJECTS);
+    setDemoProjectCategoriesState(DEMO_PROJECT_CATEGORIES);
+    setDemoCategoriesState(DEMO_CATEGORIES);
+    setDemoProjectDocsState([]);
+  }, []);
+
+  // ── Invoice operations ─────────────────────────────────────────────
+
+  const updateDemoInvoice = useCallback((id: string, changes: Partial<Invoice>) => {
+    setDemoInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, ...changes } : inv));
+  }, [setDemoInvoices]);
+
+  const deleteDemoInvoice = useCallback((id: string) => {
+    setDemoInvoices(prev => prev.filter(inv => inv.id !== id));
+  }, [setDemoInvoices]);
+
+  // ── Project operations ─────────────────────────────────────────────
+
+  const updateDemoProject = useCallback((id: string, changes: Partial<Project>) => {
+    setDemoProjects(prev => prev.map(proj => proj.id === id ? { ...proj, ...changes } : proj));
+  }, [setDemoProjects]);
+
+  const deleteDemoProject = useCallback((id: string) => {
+    setDemoProjects(prev => prev.filter(proj => proj.id !== id));
+  }, [setDemoProjects]);
+
+  const addDemoProject = useCallback((project: Project) => {
+    setDemoProjects(prev => [project, ...prev]);
+  }, [setDemoProjects]);
+
+  // ── Category operations ────────────────────────────────────────────
+
+  const addDemoProjectCategories = useCallback((entries: Omit<ProjectCategory, 'id' | 'created_at'>[]) => {
+    const newEntries = entries.map((e, i) => ({ ...e, id: `demo-pc-${Date.now()}-${i}`, created_at: '' }));
+    setDemoProjectCategories(prev => [...prev, ...newEntries]);
+  }, [setDemoProjectCategories]);
+
+  const addDemoCategory = useCallback((name: string): Category => {
+    const cat: Category = { id: `demo-cat-${Date.now()}`, name };
+    setDemoCategories(prev => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
+    return cat;
+  }, [setDemoCategories]);
+
+  // ── Document operations ────────────────────────────────────────────
+
+  const addDemoInvoice = useCallback((invoice: Invoice) => {
+    setDemoInvoices(prev => [invoice, ...prev]);
+  }, [setDemoInvoices]);
+
+  const addDemoProjectDocs = useCallback(async (projectId: string, files: File[]) => {
+    const stored: StoredDoc[] = [];
+    const demoDocs: DemoDoc[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const id = `demo-doc-${Date.now()}-${i}`;
+      const base64 = await fileToBase64(f);
+      stored.push({ id, project_id: projectId, file_name: f.name, base64, mimeType: f.type });
+      demoDocs.push({ id, project_id: projectId, file_name: f.name, signedUrl: URL.createObjectURL(f) });
+    }
+
+    // Persist stored docs (base64) separately, since blob URLs can't be serialised
+    const existingStored = ssGet<StoredDoc[]>(SS.docs, []);
+    ssSet(SS.docs, [...existingStored, ...stored]);
+
+    setDemoProjectDocsState(prev => [...prev, ...demoDocs]);
+  }, []);
+
+  // ── Value ──────────────────────────────────────────────────────────
 
   const value = useMemo(() => ({
     isDemoMode,
-    demoProjects: DEMO_PROJECTS,
-    demoInvoices: DEMO_INVOICES,
-    demoCategories: DEMO_CATEGORIES,
-    demoProjectCategories: DEMO_PROJECT_CATEGORIES,
+    demoProjects,
+    demoInvoices,
+    demoCategories,
+    demoProjectCategories,
+    demoProjectDocs,
+    demoCurrency: demoCurrencyState,
+    setDemoCurrency,
+    updateDemoInvoice,
+    deleteDemoInvoice,
+    updateDemoProject,
+    deleteDemoProject,
+    addDemoProject,
+    addDemoProjectCategories,
+    addDemoCategory,
+    addDemoProjectDocs,
+    addDemoInvoice,
     startDemo,
     stopDemo,
-  }), [isDemoMode, startDemo, stopDemo]);
+  }), [isDemoMode, demoProjects, demoInvoices, demoProjectCategories, demoCategories, demoProjectDocs, demoCurrencyState, setDemoCurrency, updateDemoInvoice, deleteDemoInvoice, updateDemoProject, deleteDemoProject, addDemoProject, addDemoProjectCategories, addDemoCategory, addDemoProjectDocs, addDemoInvoice, startDemo, stopDemo]);
 
   return (
     <DemoDataContext.Provider value={value}>

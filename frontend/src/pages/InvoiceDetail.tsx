@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Invoice, Project, Category } from '@/types/database';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import { useUserSettings } from '@/hooks/useUserSettings';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { ArrowLeft, Pencil, Check, X, Download, Trash2, Clock, FileText } from 'lucide-react';
 import { StatusDropdown } from '@/components/StatusDropdown';
+import { useDemoData } from '@/contexts/DemoDataContext';
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -32,9 +33,23 @@ const InvoiceDetail = () => {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const { baseCurrency } = useUserSettings();
   const { rates } = useExchangeRates(baseCurrency);
+  const { isDemoMode, demoInvoices, demoProjects, demoCategories, updateDemoInvoice, deleteDemoInvoice } = useDemoData();
 
   const fetchInvoice = async () => {
     if (!id) { setLoading(false); return; }
+
+    if (isDemoMode && id.startsWith('demo-')) {
+      const inv = demoInvoices.find(i => i.id === id) ?? null;
+      setInvoice(inv);
+      setProjects(demoProjects as Project[]);
+      setCategories(demoCategories);
+      if (inv?.document_path?.startsWith('blob:')) {
+        setDocumentUrl(inv.document_path);
+        setDownloadUrl(inv.document_path);
+      }
+      setLoading(false);
+      return;
+    }
     try {
       const [inv, p, c] = await Promise.all([
         supabase.from('invoices').select('*').eq('id', id).single(),
@@ -121,6 +136,13 @@ const InvoiceDetail = () => {
 
   const saveEdit = async () => {
     if (!invoice) return;
+    if (isDemoMode && invoice.id.startsWith('demo-')) {
+      updateDemoInvoice(invoice.id, editData);
+      setInvoice((prev) => prev ? { ...prev, ...editData } : prev);
+      setEditing(false);
+      toast({ title: 'Saved' });
+      return;
+    }
     const { error } = await supabase.from('invoices').update(editData).eq('id', invoice.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setEditing(false);
@@ -130,6 +152,12 @@ const InvoiceDetail = () => {
 
   const handleDelete = async () => {
     if (!invoice) return;
+    if (isDemoMode && invoice.id.startsWith('demo-')) {
+      deleteDemoInvoice(invoice.id);
+      toast({ title: 'Invoice deleted' });
+      navigate('/invoices');
+      return;
+    }
     const { error } = await supabase.from('invoices').delete().eq('id', invoice.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     toast({ title: 'Invoice deleted' });
@@ -152,7 +180,7 @@ const InvoiceDetail = () => {
   ] : [];
 
   const docPath = invoice?.document_path?.toLowerCase() ?? '';
-  const isPdf = docPath.endsWith('.pdf');
+  const isPdf = docPath.endsWith('.pdf') || docPath.startsWith('blob:');
   const isImage = /\.(jpg|jpeg|png|gif|webp)$/.test(docPath);
 
   if (loading) return (
@@ -175,7 +203,7 @@ const InvoiceDetail = () => {
   return (
     <div className="min-h-screen">
       <div className="container space-y-6 py-8">
-        <Link to="/invoices" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> All Invoices</Link>
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back</button>
 
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-4">

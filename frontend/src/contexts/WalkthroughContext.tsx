@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { useDemoData } from '@/contexts/DemoDataContext';
 
 export interface TourStep {
   target: string;       // data-tour attribute value
@@ -24,7 +26,7 @@ const TOUR_STEPS: TourStep[] = [
   {
     target: 'project-budgets',
     title: 'Project Budgets',
-    description: 'Monitor budget utilisation per project. If spending exceeds the budget, the project will appear over budget. (Example: Desert Expedition)',
+    description: 'Monitor budget utilisation per project. If spending exceeds the budget, the project will be flagged as over budget.',
     route: '/dashboard',
   },
   {
@@ -65,13 +67,24 @@ export const WalkthroughProvider = ({ children }: { children: React.ReactNode })
   const [currentStep, setCurrentStep] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
+  const { isDemoMode, stopDemo } = useDemoData();
 
   const step = isActive ? TOUR_STEPS[currentStep] ?? null : null;
 
+  const endTour = useCallback(() => {
+    setIsActive(false);
+    localStorage.setItem('bert_walkthrough_done', 'true');
+    // If a logged-in user was viewing the tour in demo mode, exit demo and return to their dashboard
+    if (user && isDemoMode) {
+      stopDemo();
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, isDemoMode, stopDemo, navigate]);
+
   const goToStep = useCallback((idx: number) => {
     if (idx < 0 || idx >= TOUR_STEPS.length) {
-      setIsActive(false);
-      localStorage.setItem('bert_walkthrough_done', 'true');
+      endTour();
       return;
     }
     setCurrentStep(idx);
@@ -79,14 +92,11 @@ export const WalkthroughProvider = ({ children }: { children: React.ReactNode })
     if (target && location.pathname !== target.route) {
       navigate(target.route);
     }
-  }, [navigate, location.pathname]);
+  }, [navigate, location.pathname, endTour]);
 
   const next = useCallback(() => goToStep(currentStep + 1), [currentStep, goToStep]);
   const prev = useCallback(() => goToStep(currentStep - 1), [currentStep, goToStep]);
-  const skip = useCallback(() => {
-    setIsActive(false);
-    localStorage.setItem('bert_walkthrough_done', 'true');
-  }, []);
+  const skip = useCallback(() => endTour(), [endTour]);
 
   const start = useCallback(() => {
     setCurrentStep(0);

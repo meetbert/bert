@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { resolvePostAuthRoute } from '@/lib/authRouting';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
+import { ArrowLeft } from 'lucide-react';
 
 const Login = () => {
   const { user } = useAuth();
@@ -77,7 +78,12 @@ const Login = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="container flex items-center justify-center py-20">
+      <div className="container pt-6">
+        <Button variant="ghost" size="sm" asChild>
+          <Link to="/"><ArrowLeft className="mr-2 h-4 w-4" />Back</Link>
+        </Button>
+      </div>
+      <div className="container flex items-center justify-center py-12">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold text-primary">Bert.</CardTitle>

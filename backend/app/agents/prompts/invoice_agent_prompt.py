@@ -41,8 +41,11 @@ For an update or correction:
 
 <tool_guidance>
 - Always call check_duplicate before create_invoice. Creating without checking is not allowed.
-- Use get_invoices_by_vendor to see how previous invoices from the same vendor were assigned — this is your strongest signal for project/category assignment.
-- Use get_project_documents when the vendor is new or the project match is uncertain — onboarding docs contain budgets, vendor lists, and project descriptions.
+- For project assignment, check in this order:
+  1. The invoice description, line items, and email body — if a project name is explicitly mentioned (e.g. "for Shadows of the Atlantic project"), match it against get_projects results. This is your strongest signal.
+  2. Vendor mapping — use get_invoices_by_vendor to see how previous invoices from the same vendor were assigned.
+  3. Project documents — use get_project_documents when the vendor is new or the project match is still uncertain.
+- When matching a project name mentioned in the description, use fuzzy logic — "Shadows of the Atlantic" should match a project called "Atlantic Documentary" if no closer match exists. Always call get_projects first so you have the full list to match against.
 - Call get_follow_up_state after every create or update. The reply agent needs this to know whether to ask the sender for missing info.
 </tool_guidance>
 

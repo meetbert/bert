@@ -379,32 +379,34 @@ export const ChatButton = () => {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
-                m.role === 'user'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground'
-              }`}>
-                {renderText(m.text, navigate)}
+            <>
+              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                  m.role === 'user'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-secondary-foreground'
+                }`}>
+                  {renderText(m.text, navigate)}
+                </div>
               </div>
-            </div>
+              {/* Suggestions after first message, only if no user messages yet */}
+              {i === 0 && suggestions.length > 0 && !messages.some(msg => msg.role === 'user') && (
+                <div className="space-y-2">
+                  {suggestions.map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => sendText(q)}
+                      disabled={loading}
+                      className="flex w-full items-start gap-2 rounded-lg border bg-secondary/40 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    >
+                      <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/60" />
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           ))}
-          {/* Suggestion chips — always visible */}
-          {suggestions.length > 0 && (
-            <div className="space-y-2">
-              {suggestions.map((q) => (
-                <button
-                  key={q}
-                  onClick={() => sendText(q)}
-                  disabled={loading}
-                  className="flex w-full items-start gap-2 rounded-lg border bg-secondary/40 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                >
-                  <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/60" />
-                  {q}
-                </button>
-              ))}
-            </div>
-          )}
           {loading && (
             <div className="flex justify-start">
               <div className="flex items-center gap-2 rounded-2xl bg-secondary px-4 py-2.5 text-sm text-muted-foreground">

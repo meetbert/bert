@@ -113,17 +113,13 @@ export const ChatButton = () => {
       const db = supabase as any;
       const historyRes = await supabase.from('chat_messages').select('role, content').eq('user_id', userId).order('created_at', { ascending: true }).limit(50);
       const projectRes = await db.from('projects').select('name').eq('user_id', userId).eq('status', 'Active').order('created_at', { ascending: false }).limit(1);
-      const categoryRes = await db.from('invoice_categories').select('name').eq('user_id', userId).limit(1);
-
       const project = projectRes.data?.[0]?.name as string | undefined;
-      const category = categoryRes.data?.[0]?.name as string | undefined;
 
       setSuggestions([
         'Which invoices are overdue?',
-        category ? `How much have I spent on ${category} this month?` : 'How much have I spent this month?',
+        'How much have I spent this month?',
         project ? `Show me the ${project} budget` : 'Show me my project budgets',
         'Who are my top vendors?',
-        'What is my total spend this month?',
         'What invoices are due this week?',
       ]);
 

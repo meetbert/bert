@@ -41,11 +41,14 @@ For an update or correction:
 
 <tool_guidance>
 - Always call check_duplicate before create_invoice. Creating without checking is not allowed.
+- Always call get_projects before attempting any assignment. You need the full project list — including their names, descriptions, known_vendors, and known_locations — to make a good match.
 - For project assignment, check in this order:
-  1. The invoice description, line items, and email body — if a project name is explicitly mentioned (e.g. "for Shadows of the Atlantic project"), match it against get_projects results. This is your strongest signal.
-  2. Vendor mapping — use get_invoices_by_vendor to see how previous invoices from the same vendor were assigned.
-  3. Project documents — use get_project_documents when the vendor is new or the project match is still uncertain.
-- When matching a project name mentioned in the description, use fuzzy logic — "Shadows of the Atlantic" should match a project called "Atlantic Documentary" if no closer match exists. Always call get_projects first so you have the full list to match against.
+  1. known_vendors match — if the invoice vendor_name appears in a project's known_vendors list, assign it to that project. This is the strongest signal.
+  2. Description/body mention — if a project name or key phrase is explicitly mentioned in the invoice description, line items, or email body (e.g. "for Shadows of the Atlantic"), fuzzy-match it against project names. "Shadows of the Atlantic" matches "Atlantic Documentary". "Desert Expedition film" matches "Desert Expedition".
+  3. known_locations match — if the invoice mentions a location that appears in a project's known_locations, use that as a signal.
+  4. Vendor history — use get_invoices_by_vendor to see how previous invoices from the same vendor were assigned.
+- Be generous with fuzzy matching — partial name overlaps, shared keywords, and location matches are all valid signals. Only leave project_id null if there is genuinely no signal at all.
+- For category assignment — use the invoice description and line items to infer the category (e.g. "camera rental" → Equipment, "catering" → Catering, "insurance" → Insurance). Call get_categories after assigning a project to pick the best match.
 - Call get_follow_up_state after every create or update. The reply agent needs this to know whether to ask the sender for missing info.
 </tool_guidance>
 

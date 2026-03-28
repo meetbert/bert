@@ -390,7 +390,7 @@ export const ChatButton = () => {
                 </div>
               </div>
               {/* Suggestions after first message, only if no user messages yet */}
-              {i === 0 && suggestions.length > 0 && !messages.some(msg => msg.role === 'user') && (
+              {i === 0 && suggestions.length > 0 && (
                 <div className="space-y-2">
                   {suggestions.map((q) => (
                     <button

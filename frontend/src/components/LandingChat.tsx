@@ -46,11 +46,15 @@ const FAQS: { keywords: string[]; answer: string }[] = [
   },
   {
     keywords: ['price', 'pricing', 'cost', 'free', 'plan'],
-    answer: "Bert is currently in demo. Reach out to the team at meetbert.uk to discuss access.",
+    answer: "Reach out to the team at info@meetbert.uk to discuss pricing and access.",
   },
   {
     keywords: ['sign', 'signup', 'register', 'account', 'start'],
     answer: "You can get started by clicking 'Log in' in the top right corner to create an account, or try the demo first to see how Bert works without signing up.",
+  },
+  {
+    keywords: ['contact', 'talk', 'speak', 'human', 'team', 'person'],
+    answer: "You can reach the Bert team directly at info@meetbert.uk — we're happy to answer any questions or set up a call.",
   },
 ];
 
@@ -67,7 +71,7 @@ function getAnswer(input: string): string {
   }
 
   if (bestMatch.score > 0) return bestMatch.answer;
-  return "I'm not sure about that — try the demo to explore Bert yourself, or email us at hello@meetbert.uk with any questions.";
+  return "I'm not sure about that — try the demo to explore Bert yourself, or email us at info@meetbert.uk with any questions.";
 }
 
 export const LandingChat = () => {

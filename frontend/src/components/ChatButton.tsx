@@ -99,23 +99,36 @@ export const ChatButton = () => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load chat history from Supabase on first open
+  // Load chat history + build personalised suggestions on first open
   useEffect(() => {
     if (!open || historyLoaded || !session) return;
 
     const loadHistory = async () => {
-      const { data } = await supabase
-        .from('chat_messages')
-        .select('role, content')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: true })
-        .limit(50);
+      const userId = session.user.id;
 
-      if (data && data.length > 0) {
-        setMessages(data.map((m: any) => ({ role: m.role, text: m.content })));
+      const db = supabase as any;
+      const historyRes = await supabase.from('chat_messages').select('role, content').eq('user_id', userId).order('created_at', { ascending: true }).limit(50);
+      const projectRes = await db.from('projects').select('name').eq('user_id', userId).eq('status', 'Active').order('created_at', { ascending: false }).limit(1);
+      const categoryRes = await db.from('invoice_categories').select('name').eq('user_id', userId).limit(1);
+
+      const project = projectRes.data?.[0]?.name as string | undefined;
+      const category = categoryRes.data?.[0]?.name as string | undefined;
+
+      setSuggestions([
+        'Which invoices are overdue?',
+        category ? `How much have I spent on ${category} this month?` : 'How much have I spent this month?',
+        project ? `Show me the ${project} budget` : 'Show me my project budgets',
+        'Who are my top vendors?',
+        'What is my total spend this month?',
+        'What invoices are due this week?',
+      ]);
+
+      if (historyRes.data && historyRes.data.length > 0) {
+        setMessages(historyRes.data.map((m: any) => ({ role: m.role, text: m.content })));
       } else {
         setMessages([
           { role: 'assistant', text: "Hey, I'm Bert. Ask me about your spend, invoices, or projects — or upload a document to get started." },
@@ -253,6 +266,34 @@ export const ChatButton = () => {
     ]);
   };
 
+  const sendText = async (text: string) => {
+    if (!text || !session?.access_token) return;
+    setMessages((prev) => [...prev, { role: 'user', text }]);
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('message', text);
+      const resp = await fetch(`${BACKEND}/api/chat`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: formData,
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: 'Request failed' }));
+        const detail = err.detail;
+        const errMsg = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map((d: any) => d.msg).join(', ') : 'Something went wrong.';
+        setMessages((prev) => [...prev, { role: 'assistant', text: `Error: ${errMsg}` }]);
+        return;
+      }
+      const data = await resp.json();
+      setMessages((prev) => [...prev, { role: 'assistant', text: data.response }]);
+    } catch {
+      setMessages((prev) => [...prev, { role: 'assistant', text: 'Could not reach the server. Is the backend running?' }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const sendMessage = async () => {
     const text = input.trim();
     if ((!text && !file) || !session?.access_token) return;
@@ -352,6 +393,22 @@ export const ChatButton = () => {
               </div>
             </div>
           ))}
+          {/* Suggestion chips — always visible */}
+          {suggestions.length > 0 && (
+            <div className="space-y-2">
+              {suggestions.map((q) => (
+                <button
+                  key={q}
+                  onClick={() => sendText(q)}
+                  disabled={loading}
+                  className="flex w-full items-start gap-2 rounded-lg border bg-secondary/40 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                >
+                  <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/60" />
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
           {loading && (
             <div className="flex justify-start">
               <div className="flex items-center gap-2 rounded-2xl bg-secondary px-4 py-2.5 text-sm text-muted-foreground">

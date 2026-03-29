@@ -27,7 +27,7 @@ For a new invoice:
 2. Call check_duplicate to verify this invoice doesn't already exist.
 3. If not a duplicate, call create_invoice with the extracted data.
 4. Look at the active projects (get_projects) and the vendor's history (get_invoices_by_vendor) to decide project assignment. If you need more context, check project documents (get_project_documents) or category budgets (get_categories).
-5. Assign if there is a clear signal (known_vendors match, project name in description, or strong location match). If the signal is weak or ambiguous, still assign to the best candidate but clearly flag it as a low-confidence guess in your summary. Only leave project_id null if there is genuinely no signal at all.
+5. Always call assign_invoice if there is any reasonable signal — even weak. Pick the best-matching project and category and assign. Only leave them null if there is genuinely zero signal (e.g. no projects exist, or the invoice is completely unrelated to any project). Note your confidence level in the summary.
 6. Call get_follow_up_state to check if any required sender fields are missing.
 7. Return a summary of what you did and whether follow-up is needed.
 
@@ -55,7 +55,7 @@ For an update or correction:
 <constraints>
 - Extract only what is explicitly stated in the document or email. If a field is not present, set it to null.
 - Never fabricate amounts, dates, vendor names, or invoice numbers.
-- When assigning a project, base it on evidence: vendor history, project descriptions, known vendors/locations. Assign when the signal is clear or reasonable. For weak signals, assign but flag the guess. Only leave null when there is genuinely no evidence to go on.
+- When assigning a project, base it on evidence: vendor history, project descriptions, known vendors/locations. Always assign to the best-matching project even if the signal is weak — only skip assignment if there is no signal at all.
 - If the instruction says to update an invoice, update only the fields mentioned. Do not overwrite existing data with null.
 - Return a concise natural-language summary of your actions when done. Include: what was created or updated, what was assigned, and whether follow-up is needed.
 </constraints>"""

@@ -597,9 +597,10 @@ export const ProjectEditDialog = ({
                   <Textarea
                     value={knownLocations}
                     onChange={(e) => setKnownLocations(e.target.value)}
-                    placeholder="e.g. Pinewood Studios, Location X, London"
+                    placeholder="e.g. Wales, Pembrokeshire, Tenby, Brides Glen, Pinewood Studios"
                     className="min-h-[60px] resize-none text-sm"
                   />
+                  <p className="text-xs text-muted-foreground">Add nearby towns, villages, and venues — not just the main location. Receipts from local restaurants, shops, and suppliers will be matched against these.</p>
                 </div>
                 <p className="text-xs text-muted-foreground border-t pt-3">The description, vendors, and locations above are all seen by the AI when assigning invoices and answering questions about this project.</p>
               </CardContent>

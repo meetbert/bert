@@ -402,8 +402,8 @@ export const ChatButton = () => {
               )}
             </div>
           ))}
-          {/* Suggestion chips — always at bottom */}
-          {suggestions.length > 0 && (
+          {/* Suggestion chips — only when no user messages yet */}
+          {suggestions.length > 0 && !messages.some(m => m.role === 'user') && (
             <div className="space-y-2">
               {suggestions.map((q) => (
                 <button

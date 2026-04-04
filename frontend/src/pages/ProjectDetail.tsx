@@ -297,7 +297,7 @@ const ProjectDetail = () => {
                   <tr
                     key={inv.id}
                     onClick={() => navigate(`/invoices/${inv.id}`)}
-                    className={`group border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60 ${unassigned ? 'border-l-2 border-l-primary/60 bg-primary/[0.03]' : 'border-l-2 border-l-transparent'}`}
+                    className={`group border-b last:border-b-0 cursor-pointer transition-colors hover:bg-secondary/60 ${unassigned ? 'border-l-2 border-l-primary/60 bg-primary/[0.03]' : 'border-l-2 border-l-transparent'}`}
                   >
                     <td className="p-3 font-medium">{inv.vendor_name ?? 'Unknown'}</td>
                     <td className="p-3 text-muted-foreground">{inv.invoice_date ?? '—'}</td>

@@ -42,10 +42,8 @@ async def chat(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Build user-facing content for message persistence
+    # Store just the message text; attachment_path is persisted separately
     user_content = message
-    if filename:
-        user_content = filename + (f' — "{message}"' if message.strip() else "")
 
     result = await process_chat(
         user_id=preprocessed["user_id"],

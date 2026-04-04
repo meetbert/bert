@@ -83,6 +83,9 @@ async def run_classifier(user_id: str, email_context: str) -> list[dict]:
         Returns ``[]`` if no actionable items are found.
     """
     tools = _select_tools(user_id)
+    # Contact tool requires an email address — not available in chat contexts
+    if email_context.strip().startswith("Source: Chat"):
+        tools = [t for t in tools if t.name != "create_or_update_contact"]
     tool_map = {t.name: t for t in tools}
     llm = get_llm().bind_tools(tools)
 

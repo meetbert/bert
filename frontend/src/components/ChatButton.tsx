@@ -10,7 +10,7 @@ import { useDemoData } from '@/contexts/DemoDataContext';
 const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
 const ACCEPTED = '.pdf,.jpg,.jpeg,.png,.webp';
 
-type Message = { role: 'user' | 'assistant'; text: string };
+type Message = { role: 'user' | 'assistant'; text: string; attachment?: string };
 
 const PANEL_WIDTH = 'sm:w-[400px]';
 
@@ -111,7 +111,7 @@ export const ChatButton = () => {
       const userId = session.user.id;
 
       const db = supabase as any;
-      const historyRes = await supabase.from('chat_messages').select('role, content').eq('user_id', userId).order('created_at', { ascending: true }).limit(50);
+      const historyRes = await supabase.from('chat_messages').select('role, content, attachment_path').eq('user_id', userId).order('created_at', { ascending: true }).limit(50);
       const projectRes = await db.from('projects').select('name').eq('user_id', userId).eq('status', 'Active').order('created_at', { ascending: false }).limit(1);
       const project = projectRes.data?.[0]?.name as string | undefined;
 
@@ -124,7 +124,15 @@ export const ChatButton = () => {
       ]);
 
       if (historyRes.data && historyRes.data.length > 0) {
-        setMessages(historyRes.data.map((m: any) => ({ role: m.role, text: m.content })));
+        setMessages(historyRes.data.map((m: any) => {
+          if (!m.attachment_path) return { role: m.role, text: m.content };
+          const rawName = m.attachment_path.split('/').pop()!;
+          // Strip 12-char hash prefix added by store_attachment (e.g. "5e89cea9af29_")
+          const filename = rawName.replace(/^[0-9a-f]{12}_/, '');
+          const oldMatch = m.content?.match(/^.+ — "(.+)"$/s);
+          const text = oldMatch ? oldMatch[1] : (m.content === rawName || m.content === filename ? '' : (m.content ?? ''));
+          return { role: m.role, text, attachment: filename };
+        }));
       } else {
         setMessages([
           { role: 'assistant', text: "Hey, I'm Bert. Ask me about your spend, invoices, or projects — or upload a document to get started." },
@@ -186,7 +194,7 @@ export const ChatButton = () => {
           }`}
         >
           <div className="flex items-center justify-between border-b px-6 py-4">
-            <h2 className="text-base font-semibold">Talk to Bert!</h2>
+            <span className="text-lg font-extrabold">Talk to <span className="text-primary">Bert.</span></span>
             <button onClick={() => setOpen(false)} className="rounded-sm p-1 opacity-70 hover:opacity-100">
               <X className="h-4 w-4" />
             </button>
@@ -294,11 +302,8 @@ export const ChatButton = () => {
     const text = input.trim();
     if ((!text && !file) || !session?.access_token) return;
 
-    // Build user-facing text
-    const userText = file
-      ? file.name + (text ? ` — "${text}"` : '')
-      : text;
-    setMessages((prev) => [...prev, { role: 'user', text: userText }]);
+    const userText = text;
+    setMessages((prev) => [...prev, { role: 'user', text: userText, attachment: file?.name }]);
     setLoading(true);
     setInput('');
     const uploadedFile = file;
@@ -365,7 +370,7 @@ export const ChatButton = () => {
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b px-6 py-4">
-          <h2 className="text-base font-semibold">Talk to Bert!</h2>
+          <span className="text-lg font-extrabold">Talk to <span className="text-primary">Bert.</span></span>
           <div className="flex items-center gap-1">
             <button onClick={clearChat} className="rounded-sm p-1 opacity-70 hover:opacity-100" title="Clear chat">
               <Trash2 className="h-4 w-4" />
@@ -379,14 +384,22 @@ export const ChatButton = () => {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
-                m.role === 'user'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground'
-              }`}>
-                {renderText(m.text, navigate)}
-              </div>
+            <div key={i} className={`flex flex-col gap-1 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+              {m.attachment && (
+                <div className="inline-flex items-center gap-2 rounded-lg border bg-secondary/50 px-3 py-1.5 text-xs text-foreground">
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="max-w-[200px] truncate">{m.attachment}</span>
+                </div>
+              )}
+              {m.text && (
+                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                  m.role === 'user'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-secondary-foreground'
+                }`}>
+                  {renderText(m.text, navigate)}
+                </div>
+              )}
             </div>
           ))}
           {/* Suggestion chips — always at bottom */}
@@ -420,7 +433,7 @@ export const ChatButton = () => {
         <div className="border-t px-4 py-3">
           {/* File preview chip */}
           {file && (
-            <div className="mb-2">
+            <div className="mb-3">
               <div className="inline-flex items-center gap-2 rounded-lg border bg-secondary/50 px-3 py-1.5 text-xs">
                 <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="max-w-[200px] truncate">{file.name}</span>

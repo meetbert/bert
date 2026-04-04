@@ -31,6 +31,7 @@ const Invoices = () => {
   const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);
   const [rawProjects, setRawProjects] = useState<Project[]>([]);
   const [rawCategories, setRawCategories] = useState<Category[]>([]);
+  const [projectCategories, setProjectCategories] = useState<{ project_id: string; category_id: string }[]>([]);
   const { isDemoMode, demoInvoices, demoProjects, demoCategories, updateDemoInvoice } = useDemoData();
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -56,10 +57,11 @@ const Invoices = () => {
   }, [location.search]);
 
   const fetchData = useCallback(async () => {
-    const [i, p, c] = await Promise.all([
+    const [i, p, c, pc] = await Promise.all([
       supabase.from('invoices').select('*').order('invoice_date', { ascending: false }),
       supabase.from('projects').select('*'),
       supabase.from('invoice_categories').select('*'),
+      supabase.from('project_categories').select('project_id, category_id'),
     ]);
 
     const projectsMap = new Map((p.data ?? []).map((proj: any) => [proj.id, proj]));
@@ -82,6 +84,7 @@ const Invoices = () => {
     setRawInvoices(enriched);
     setRawProjects(p.data ?? []);
     setRawCategories(c.data ?? []);
+    setProjectCategories(pc.data ?? []);
     setLoading(false);
   }, []);
 
@@ -328,12 +331,16 @@ const Invoices = () => {
                   const origCurrency = inv.currency || baseCurrency;
                   const showOriginal = origCurrency !== baseCurrency;
                   const isArchived = inv.project_id && archivedProjectIds.has(inv.project_id);
-                  const unassigned = !inv.category_id || !inv.project_id;
+                  const projCats = inv.project_id ? projectCategories.filter(pc => pc.project_id === inv.project_id) : null;
+                  const catValid = !!(inv.category_id
+                    && categories.some(c => c.id === inv.category_id)
+                    && (!projCats || projCats.length === 0 || projCats.some(pc => pc.category_id === inv.category_id)));
+                  const unassigned = !catValid || !inv.project_id;
                   return (
                     <tr
                       key={inv.id}
                       onClick={() => navigate(`/invoices/${inv.id}`)}
-                      className={`group border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60 ${isArchived ? 'opacity-60' : ''} ${unassigned ? 'outline outline-1 -outline-offset-1 outline-primary/50 bg-primary/[0.03]' : ''}`}
+                      className={`group border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60 ${isArchived ? 'opacity-60' : ''} ${unassigned ? 'border-l-2 border-l-primary/60 bg-primary/[0.03]' : 'border-l-2 border-l-transparent'}`}
                     >
                       <td className="p-3 font-medium">{inv.vendor_name}</td>
                       <td className="p-3 text-muted-foreground">{inv.invoice_date}</td>
@@ -350,7 +357,7 @@ const Invoices = () => {
                         )}
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                        <Select value={inv.category_id && categories.some(c => c.id === inv.category_id) ? inv.category_id : 'unassigned'} onValueChange={(v) => v === 'unassigned' ? unassignCategory(inv.id) : assignCategory(inv.id, v)}>
+                        <Select value={catValid ? inv.category_id! : undefined} onValueChange={(v) => v === 'unassigned' ? unassignCategory(inv.id) : assignCategory(inv.id, v)}>
                           <SelectTrigger className="h-7 w-36 text-xs border-dashed justify-between text-left">
                             <SelectValue placeholder="" />
                           </SelectTrigger>
@@ -362,7 +369,7 @@ const Invoices = () => {
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5">
-                          <Select value={inv.project_id ?? 'unassigned'} onValueChange={(v) => v === 'unassigned' ? unassignProject(inv.id) : assignProject(inv.id, v)}>
+                          <Select value={inv.project_id && projects.some(p => p.id === inv.project_id) ? inv.project_id : undefined} onValueChange={(v) => v === 'unassigned' ? unassignProject(inv.id) : assignProject(inv.id, v)}>
                             <SelectTrigger className="h-7 w-36 text-xs border-dashed justify-between text-left">
                               <SelectValue placeholder="" />
                             </SelectTrigger>

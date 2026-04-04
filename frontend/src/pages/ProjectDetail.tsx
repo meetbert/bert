@@ -291,12 +291,13 @@ const ProjectDetail = () => {
               {sortedInvoices.length === 0 ? (
                 <tr><td colSpan={7} className="py-8 text-center text-sm text-muted-foreground">No invoices for this project yet.</td></tr>
               ) : sortedInvoices.map((inv) => {
-                const unassigned = !inv.category_id;
+                const catValid = !!(inv.category_id && assignableCategories.some(c => c.id === inv.category_id));
+                const unassigned = !catValid;
                 return (
                   <tr
                     key={inv.id}
                     onClick={() => navigate(`/invoices/${inv.id}`)}
-                    className={`group border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60 ${unassigned ? 'outline outline-1 -outline-offset-1 outline-primary/50 bg-primary/[0.03]' : ''}`}
+                    className={`group border-b last:border-0 cursor-pointer transition-colors hover:bg-secondary/60 ${unassigned ? 'border-l-2 border-l-primary/60 bg-primary/[0.03]' : 'border-l-2 border-l-transparent'}`}
                   >
                     <td className="p-3 font-medium">{inv.vendor_name ?? 'Unknown'}</td>
                     <td className="p-3 text-muted-foreground">{inv.invoice_date ?? '—'}</td>

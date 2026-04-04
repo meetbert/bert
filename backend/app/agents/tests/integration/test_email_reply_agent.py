@@ -1,8 +1,8 @@
 """
-Reply Agent tests — integration tests with real LLM + real AgentMail.
+Email Reply Agent tests — integration tests with real LLM + real AgentMail.
 Run from agent/: python -m pytest tests/test_reply_agent.py -v
 
-Tests the reply agent: draft reply from task results → send via AgentMail.
+Tests the email reply agent: draft reply from task results → send via AgentMail.
 Each test sends a setup message (testinbox → testinbox) to create a thread,
 then the reply agent replies on that thread.
 """
@@ -13,19 +13,43 @@ import pytest
 
 from app.agents.config import agentmail_post, supabase
 from app.agents.subagents.email_reply_agent import run_email_reply_agent as run_reply_agent
+from .conftest import USER_ID
 
-USER_ID = "cf08829b-9f8a-4448-b3b3-666391e469c0"
+INBOX_ID = "testinboxforbert@agentmail.to"
 _RUN_TAG = f"[test-{uuid.uuid4().hex[:8]}]"
 
-# Look up inbox once at module level
-_settings = (
-    supabase.table("user_settings")
-    .select("agentmail_inbox")
-    .eq("id", USER_ID)
-    .maybe_single()
-    .execute()
-)
-INBOX_ID = _settings.data.get("agentmail_inbox") if _settings and _settings.data else None
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module", autouse=True)
+def setup_settings():
+    """Create user_settings with the test inbox, restore original after."""
+    orig = (
+        supabase.table("user_settings")
+        .select("*")
+        .eq("id", USER_ID)
+        .maybe_single()
+        .execute()
+    )
+    had_settings = orig is not None and orig.data is not None
+    orig_data = orig.data if had_settings else None
+
+    supabase.table("user_settings").upsert({
+        "id": USER_ID,
+        "company_name": "Test Company",
+        "base_currency": "USD",
+        "max_followups": 3,
+        "agentmail_inbox": INBOX_ID,
+    }).execute()
+
+    yield
+
+    if had_settings:
+        supabase.table("user_settings").upsert(orig_data).execute()
+    else:
+        supabase.table("user_settings").delete().eq("id", USER_ID).execute()
 
 
 # ---------------------------------------------------------------------------

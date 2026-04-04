@@ -483,6 +483,8 @@ def create_action_tools(user_id: str) -> list:
         Used for corrections (e.g., sender replies with the correct total)
         or filling in fields that were null. Pass thread_id to link an
         additional email thread to the invoice.
+        invoice_id MUST be the UUID from the 'id' field returned by
+        search_invoices or get_invoice — never a vendor name or invoice number.
         """
         # Only allow known updatable fields
         clean = {k: v for k, v in updates.items() if k in UPDATABLE_FIELDS}
@@ -493,13 +495,16 @@ def create_action_tools(user_id: str) -> list:
         clean["updated_at"] = "now()"
 
         # Apply the update
-        result = (
-            supabase.table("invoices")
-            .update(clean)
-            .eq("id", invoice_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
+        try:
+            result = (
+                supabase.table("invoices")
+                .update(clean)
+                .eq("id", invoice_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+        except Exception as e:
+            return {"error": f"Failed to update invoice: {e}. invoice_id must be a UUID from search_invoices or get_invoice."}
 
         if not result.data:
             return {"error": "Invoice not found or access denied"}
@@ -533,20 +538,25 @@ def create_action_tools(user_id: str) -> list:
         a document, moves it in storage from unassigned/ to the project folder.
         Call this after reasoning about which project and category fit best
         using get_projects, get_categories, get_project_documents, and
-        get_invoices_by_vendor.
+        search_invoices (vendor history).
+        project_id and category_id MUST be UUIDs returned by get_projects /
+        get_categories — never pass a name or guessed value.
         """
         # Update the invoice row
-        result = (
-            supabase.table("invoices")
-            .update({
-                "project_id": project_id,
-                "category_id": category_id,
-                "updated_at": "now()",
-            })
-            .eq("id", invoice_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
+        try:
+            result = (
+                supabase.table("invoices")
+                .update({
+                    "project_id": project_id,
+                    "category_id": category_id,
+                    "updated_at": "now()",
+                })
+                .eq("id", invoice_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+        except Exception as e:
+            return {"error": f"Failed to assign invoice: {e}"}
 
         if not result.data:
             return {"error": "Invoice not found or access denied"}
@@ -692,13 +702,16 @@ def create_action_tools(user_id: str) -> list:
         if len(updates) == 1:
             return {"error": "No fields to update"}
 
-        result = (
-            supabase.table("projects")
-            .update(updates)
-            .eq("id", project_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
+        try:
+            result = (
+                supabase.table("projects")
+                .update(updates)
+                .eq("id", project_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+        except Exception as e:
+            return {"error": f"Failed to update project: {e}. project_id must be a UUID from get_projects."}
         if not result.data:
             return {"error": "Project not found or access denied"}
         return result.data[0]
@@ -731,90 +744,6 @@ def create_action_tools(user_id: str) -> list:
             return {"saved": True, "vendor_name": vendor_name}
         except Exception as e:
             return {"error": f"Could not save vendor mapping: {e}"}
-
-    # ---- send_chaser ----------------------------------------------------
-
-    @tool
-    def send_chaser(invoice_id: str, custom_message: str = "") -> dict:
-        """Send a payment chaser email to a vendor for an outstanding invoice.
-
-        Looks up the invoice, finds the vendor's email from contacts,
-        and sends a professional payment reminder from the user's Bert inbox.
-        If a prior email thread exists for this invoice, replies to it.
-        Otherwise sends a new email. Pass custom_message to override the
-        default template.
-        Returns {"sent": true, "to": email} or {"error": "..."}."""
-        if not _inbox_id:
-            return {"error": "No AgentMail inbox configured"}
-
-        # Fetch the invoice
-        inv_result = (
-            supabase.table("invoices")
-            .select("id, vendor_name, total, currency, invoice_number, due_date, invoice_date")
-            .eq("id", invoice_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
-        invoice = inv_result.data[0] if inv_result.data else None
-        if not invoice:
-            return {"error": "Invoice not found"}
-
-        # Find vendor email
-        vendor = invoice.get("vendor_name", "")
-        contact_result = (
-            supabase.table("email_contacts")
-            .select("email, display_name")
-            .eq("user_id", user_id)
-            .ilike("display_name", f"%{vendor}%")
-            .execute()
-        )
-        vendor_email = contact_result.data[0]["email"] if contact_result.data else None
-        if not vendor_email:
-            return {"error": f"No email contact found for {vendor}. Add their email first."}
-
-        # Build message
-        amount = f"{invoice.get('currency', '')} {invoice.get('total', '')}".strip()
-        inv_num = invoice.get("invoice_number") or invoice_id[:8]
-        due = invoice.get("due_date") or "as soon as possible"
-
-        body = custom_message or (
-            f"Hi,\n\nI'm writing to follow up on invoice {inv_num} for {amount}, "
-            f"which was due on {due}. Could you please arrange payment at your earliest convenience?\n\n"
-            f"Please let me know if you have any questions.\n\nMany thanks"
-        )
-
-        # Reply to existing thread if one exists, otherwise send new message
-        thread_result = (
-            supabase.table("invoice_threads")
-            .select("thread_id")
-            .eq("invoice_id", invoice_id)
-            .limit(1)
-            .execute()
-        )
-
-        try:
-            if thread_result.data:
-                thread_id = thread_result.data[0]["thread_id"]
-                # Get the latest message in the thread to reply to
-                messages = agentmail_get(f"/inboxes/{_inbox_id}/threads/{thread_id}")
-                msgs = messages.get("messages", [])
-                if msgs:
-                    last_msg_id = msgs[-1].get("message_id")
-                    agentmail_post(
-                        f"/inboxes/{_inbox_id}/messages/{last_msg_id}/reply",
-                        {"text": body},
-                    )
-                    return {"sent": True, "to": vendor_email, "method": "reply"}
-
-            # No thread — send new message
-            subject = f"Payment reminder — invoice {inv_num}"
-            agentmail_post(
-                f"/inboxes/{_inbox_id}/messages",
-                {"to": vendor_email, "subject": subject, "text": body},
-            )
-            return {"sent": True, "to": vendor_email, "method": "new"}
-        except Exception as e:
-            return {"error": f"Failed to send chaser: {e}"}
 
     # ---- send_reply -----------------------------------------------------
 
@@ -884,7 +813,6 @@ def create_action_tools(user_id: str) -> list:
         delete_invoice,
         update_project,
         set_vendor_mapping,
-        send_chaser,
         create_project,
         send_reply,
     ]

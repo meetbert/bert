@@ -11,19 +11,17 @@ Email context format matches the classifier tests and preprocessing spec:
 
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from app.agents.config import supabase
 from app.agents.subagents.invoice_agent import run_invoice_agent
+from .conftest import USER_ID
 
-USER_ID = "cf08829b-9f8a-4448-b3b3-666391e469c0"
-SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "sample_invoices")
+SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "sample_invoices")
 STORAGE_PREFIX = f"{USER_ID}/unassigned"
 
 _RUN_TAG = f"[test-{uuid.uuid4().hex[:8]}]"
-_TEST_MARKER = "[test-"
 
 
 # ---------------------------------------------------------------------------
@@ -56,30 +54,6 @@ def _make_email(
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="module", autouse=True)
-def sweep_orphans():
-    """Delete orphaned test rows older than 1 hour."""
-    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-
-    old_invoices = (
-        supabase.table("invoices")
-        .select("id")
-        .eq("user_id", USER_ID)
-        .ilike("vendor_name", f"%{_TEST_MARKER}%")
-        .lt("created_at", one_hour_ago)
-        .execute()
-    )
-    for inv in old_invoices.data:
-        try:
-            supabase.table("invoice_threads").delete().eq(
-                "invoice_id", inv["id"]
-            ).execute()
-            supabase.table("invoices").delete().eq("id", inv["id"]).execute()
-        except Exception:
-            pass
-    yield
-
 
 @pytest.fixture(scope="module")
 def uploaded_paths():
@@ -280,3 +254,97 @@ async def test_not_invoice_attachment(uploaded_paths):
 
     assert result["invoice_id"] is None
     assert result["summary"]
+
+
+@pytest.mark.asyncio
+async def test_bulk_update_via_agent(cleanup_invoices):
+    """Agent should bulk update invoices when instructed."""
+    # Pre-create two invoices from the same vendor
+    vendor = f"Bulk Test Vendor {_RUN_TAG}"
+    ids = []
+    for _ in range(2):
+        inv = (
+            supabase.table("invoices")
+            .insert({
+                "user_id": USER_ID,
+                "vendor_name": vendor,
+                "total": 500.00,
+                "invoice_date": "2026-01-01",
+                "currency": "EUR",
+                "payment_status": "unpaid",
+            })
+            .execute()
+        )
+        inv_id = inv.data[0]["id"]
+        cleanup_invoices.append(inv_id)
+        ids.append(inv_id)
+
+    context = (
+        f"Source: Chat\n"
+        f"User message: mark all {vendor} invoices as paid\n"
+        f"Attachments: []"
+    )
+
+    result = await run_invoice_agent(
+        user_id=USER_ID,
+        task_instruction=f"Bulk mark all invoices from '{vendor}' as paid.",
+        email_context=context,
+    )
+
+    assert result["summary"]
+
+    # Verify all are paid
+    for inv_id in ids:
+        inv = (
+            supabase.table("invoices")
+            .select("payment_status")
+            .eq("id", inv_id)
+            .maybe_single()
+            .execute()
+        )
+        assert inv.data["payment_status"] == "paid"
+
+
+@pytest.mark.asyncio
+async def test_delete_via_agent(cleanup_invoices):
+    """Agent should delete an invoice when instructed."""
+    vendor = f"Delete Test Vendor {_RUN_TAG}"
+    inv = (
+        supabase.table("invoices")
+        .insert({
+            "user_id": USER_ID,
+            "vendor_name": vendor,
+            "total": 300.00,
+            "invoice_date": "2026-01-01",
+            "currency": "EUR",
+            "invoice_number": f"DEL-001-{_RUN_TAG}",
+        })
+        .execute()
+    )
+    inv_id = inv.data[0]["id"]
+    # Only add to cleanup if agent doesn't delete it
+    cleanup_invoices.append(inv_id)
+
+    context = (
+        f"Source: Chat\n"
+        f"User message: delete invoice DEL-001-{_RUN_TAG}\n"
+        f"Attachments: []"
+    )
+
+    result = await run_invoice_agent(
+        user_id=USER_ID,
+        task_instruction=f"Delete invoice with invoice_number DEL-001-{_RUN_TAG}. Search for it first to get the ID.",
+        email_context=context,
+    )
+
+    assert result["summary"]
+
+    # Verify deleted (maybe_single returns None when no row found)
+    gone = (
+        supabase.table("invoices")
+        .select("id")
+        .eq("id", inv_id)
+        .maybe_single()
+        .execute()
+    )
+    assert gone is None or gone.data is None

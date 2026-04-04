@@ -12,6 +12,8 @@ from langsmith import traceable
 from app.agents.config import supabase
 from app.agents.subagents.classifier import run_classifier
 from app.agents.subagents.invoice_agent import run_invoice_agent
+from app.agents.subagents.project_agent import run_project_agent
+from app.agents.subagents.question_agent import run_question_agent
 
 logger = logging.getLogger("bert.pipeline")
 
@@ -70,11 +72,21 @@ async def run_pipeline(user_id: str, context: str) -> dict:
             if result.get("follow_up_state"):
                 follow_up_states.append(str(result["follow_up_state"]))
 
-        elif task["type"] in ("project_management", "question"):
-            task_results.append(
-                f"[{task['type']}] Not yet implemented: {task['instruction']}"
+        elif task["type"] == "project_management":
+            result = await run_project_agent(
+                user_id=user_id,
+                task_instruction=task["instruction"],
+                context=context,
             )
-            logger.info("Skipping post-MVP task type: %s", task["type"])
+            task_results.append(result["summary"])
+
+        elif task["type"] == "question":
+            result = await run_question_agent(
+                user_id=user_id,
+                task_instruction=task["instruction"],
+                context=context,
+            )
+            task_results.append(result["summary"])
 
     return {
         "tasks": tasks,

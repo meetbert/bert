@@ -13,29 +13,34 @@ from langsmith import traceable
 from app.agents.config import get_llm
 from app.agents.prompts.classifier_prompt import CLASSIFIER_SYSTEM
 from app.agents.tools.action_tools import create_action_tools
-from app.agents.tools.get_tools import create_get_tools
 
 
 CLASSIFIER_TOOLS = {
-    "get_invoice", "get_invoices_by_vendor", "get_projects",
     "create_or_update_contact",
 }
-VALID_TASK_TYPES = {"invoice_management", "project_management"}
+VALID_TASK_TYPES = {"invoice_management", "project_management", "question"}
 _MAX_ITERATIONS = 10
 
 
 def _select_tools(user_id: str) -> list:
-    """Return the classifier's tools from both get and action factories."""
-    all_tools = create_get_tools(user_id) + create_action_tools(user_id)
+    """Return the classifier's tools."""
+    all_tools = create_action_tools(user_id)
     return [t for t in all_tools if t.name in CLASSIFIER_TOOLS]
 
 
-def _parse_tasks(text: str) -> list[dict]:
+def _parse_tasks(text) -> list[dict]:
     """Extract the JSON task array from the LLM's final response.
 
     Handles JSON wrapped in ```json code fences or bare JSON.
     Returns an empty list if parsing fails or no tasks found.
     """
+    # Newer LangChain/Claude may return content as a list of blocks
+    if isinstance(text, list):
+        text = " ".join(
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in text
+        )
+
     # Try code-fenced JSON first
     match = re.search(r"```(?:json)?\s*(\[.*?\])\s*```", text, re.DOTALL)
     if match:
@@ -86,9 +91,14 @@ async def run_classifier(user_id: str, email_context: str) -> list[dict]:
         HumanMessage(content=email_context),
     ]
 
+    tasks = []
     for _ in range(_MAX_ITERATIONS):
         response: AIMessage = await llm.ainvoke(messages)
         messages.append(response)
+
+        parsed = _parse_tasks(response.content)
+        if parsed:
+            tasks = parsed
 
         if not response.tool_calls:
             break
@@ -99,4 +109,4 @@ async def run_classifier(user_id: str, email_context: str) -> list[dict]:
                 ToolMessage(content=str(result), tool_call_id=tc["id"])
             )
 
-    return _parse_tasks(response.content)
+    return tasks

@@ -16,12 +16,14 @@ from app.agents.tools.get_tools import create_get_tools
 
 INVOICE_AGENT_TOOLS = {
     # Get tools
-    "get_invoice", "get_invoices_by_vendor", "get_projects",
-    "get_categories", "get_project_documents", "get_user_settings",
+    "get_invoice", "search_invoices",
+    "get_projects", "get_categories", "get_project_documents",
     "get_follow_up_state",
     # Action tools
     "extract_invoice_data", "check_duplicate",
     "create_invoice", "update_invoice", "assign_invoice",
+    "bulk_update_invoices", "delete_invoice",
+    "set_vendor_mapping",
 }
 _MAX_ITERATIONS = 25
 

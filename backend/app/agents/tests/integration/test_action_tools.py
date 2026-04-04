@@ -16,22 +16,18 @@ runs.  A module-level sweep deletes any orphaned test rows older than 1 hour.
 import hashlib
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from app.agents.config import supabase
 from app.agents.tools.action_tools import create_action_tools
+from .conftest import USER_ID
 
-USER_ID = "cf08829b-9f8a-4448-b3b3-666391e469c0"
-SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "sample_invoices")
+SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "sample_invoices")
 STORAGE_PREFIX = f"{USER_ID}/unassigned"
 
 # Unique tag for this test run — appended to vendor names
 _RUN_TAG = f"[test-{uuid.uuid4().hex[:8]}]"
-
-# Marker prefix used to identify all test rows (for orphan cleanup)
-_TEST_MARKER = "[test-"
 
 # Fake email contexts for each sample invoice
 FAKE_EMAILS = {
@@ -86,51 +82,6 @@ def _local_hash(sample_num: int) -> str:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="module", autouse=True)
-def sweep_orphaned_test_rows():
-    """Delete any test rows older than 1 hour from previous crashed runs."""
-    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-
-    # Clean orphaned invoices (and their threads)
-    old_invoices = (
-        supabase.table("invoices")
-        .select("id")
-        .eq("user_id", USER_ID)
-        .ilike("vendor_name", f"%{_TEST_MARKER}%")
-        .lt("created_at", one_hour_ago)
-        .execute()
-    )
-    for inv in old_invoices.data:
-        try:
-            supabase.table("invoice_threads").delete().eq(
-                "invoice_id", inv["id"]
-            ).execute()
-            supabase.table("invoices").delete().eq("id", inv["id"]).execute()
-        except Exception:
-            pass
-
-    # Clean orphaned contacts
-    old_contacts = (
-        supabase.table("email_contacts")
-        .select("id")
-        .eq("user_id", USER_ID)
-        .ilike("email", f"%{_TEST_MARKER}%")
-        .lt("created_at", one_hour_ago)
-        .execute()
-    )
-    for contact in old_contacts.data:
-        try:
-            supabase.table("email_contacts").delete().eq(
-                "id", contact["id"]
-            ).execute()
-        except Exception:
-            pass
-
-    yield  # run all tests
-
-    # No extra teardown needed — per-test fixtures handle normal cleanup
-
 
 @pytest.fixture(scope="module")
 def tools():
@@ -543,6 +494,52 @@ class TestUpdateInvoice:
 
 class TestAssignInvoice:
 
+    @pytest.fixture(autouse=True)
+    def one_project(self):
+        """Create a project with one category for assign tests."""
+        cat_result = (
+            supabase.table("invoice_categories")
+            .select("id")
+            .eq("name", "Office Supplies")
+            .execute()
+        )
+        if cat_result.data:
+            category_id = cat_result.data[0]["id"]
+            self._created_category = False
+        else:
+            cat = (
+                supabase.table("invoice_categories")
+                .insert({"name": "Office Supplies"})
+                .execute()
+            )
+            category_id = cat.data[0]["id"]
+            self._created_category = True
+
+        proj = (
+            supabase.table("projects")
+            .insert({
+                "user_id": USER_ID,
+                "name": f"Assign Project {_RUN_TAG}",
+                "status": "Active",
+            })
+            .execute()
+        )
+        project_id = proj.data[0]["id"]
+        supabase.table("project_categories").insert({
+            "project_id": project_id,
+            "category_id": category_id,
+            "budget": 1000,
+        }).execute()
+
+        self._project_id = project_id
+        self._category_id = category_id
+        yield
+
+        supabase.table("project_categories").delete().eq("project_id", project_id).execute()
+        supabase.table("projects").delete().eq("id", project_id).execute()
+        if self._created_category:
+            supabase.table("invoice_categories").delete().eq("id", category_id).execute()
+
     def test_assign_sets_project_and_category(self, tools, cleanup_invoices):
         """Assign should set project_id and category_id on the invoice."""
         invoice = tools["create_invoice"].invoke({
@@ -553,30 +550,13 @@ class TestAssignInvoice:
         })
         cleanup_invoices.append(invoice["id"])
 
-        projects = (
-            supabase.table("projects")
-            .select("id, project_categories(id, category_id)")
-            .eq("user_id", USER_ID)
-            .eq("status", "Active")
-            .limit(1)
-            .execute()
-        )
-        if not projects.data:
-            pytest.skip("No active projects for test user")
-
-        project_id = projects.data[0]["id"]
-        cats = projects.data[0].get("project_categories", [])
-        if not cats:
-            pytest.skip("No categories for test project")
-        category_id = cats[0]["category_id"]
-
         result = tools["assign_invoice"].invoke({
             "invoice_id": invoice["id"],
-            "project_id": project_id,
-            "category_id": category_id,
+            "project_id": self._project_id,
+            "category_id": self._category_id,
         })
-        assert result.get("project_id") == project_id
-        assert result.get("category_id") == category_id
+        assert result.get("project_id") == self._project_id
+        assert result.get("category_id") == self._category_id
 
     def test_assign_nonexistent_invoice(self, tools):
         """Assigning a non-existent invoice should return an error."""
@@ -586,3 +566,344 @@ class TestAssignInvoice:
             "category_id": "fake-category",
         })
         assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# bulk_update_invoices
+# ---------------------------------------------------------------------------
+
+class TestBulkUpdateInvoices:
+
+    def test_bulk_update_payment_status(self, tools, cleanup_invoices):
+        """Bulk mark multiple invoices as paid."""
+        ids = []
+        for i in range(3):
+            inv = tools["create_invoice"].invoke({
+                "vendor_name": _tagged(f"Bulk Vendor {i}"),
+                "total": float(100 * (i + 1)),
+                "invoice_date": "2026-01-01",
+                "currency": "EUR",
+            })
+            cleanup_invoices.append(inv["id"])
+            ids.append(inv["id"])
+
+        result = tools["bulk_update_invoices"].invoke({
+            "invoice_ids": ids,
+            "updates": {"payment_status": "paid"},
+        })
+        assert result["updated"] == 3
+        assert result["total"] == 3
+
+        # Verify all are paid
+        for inv_id in ids:
+            inv = supabase.table("invoices").select("payment_status").eq("id", inv_id).maybe_single().execute()
+            assert inv.data["payment_status"] == "paid"
+
+    def test_bulk_update_rejects_protected_fields(self, tools, cleanup_invoices):
+        """Fields outside the allowlist should be silently ignored."""
+        inv = tools["create_invoice"].invoke({
+            "vendor_name": _tagged("Bulk Allowlist Test"),
+            "total": 100.00,
+            "invoice_date": "2026-01-01",
+            "currency": "EUR",
+        })
+        cleanup_invoices.append(inv["id"])
+
+        result = tools["bulk_update_invoices"].invoke({
+            "invoice_ids": [inv["id"]],
+            "updates": {"user_id": "hacker", "id": "fake"},
+        })
+        assert result.get("error") == "No valid fields to update"
+
+    def test_bulk_update_empty_list(self, tools):
+        """Empty invoice_ids list — should return updated=0."""
+        result = tools["bulk_update_invoices"].invoke({
+            "invoice_ids": [],
+            "updates": {"payment_status": "paid"},
+        })
+        assert result["updated"] == 0
+
+
+# ---------------------------------------------------------------------------
+# delete_invoice
+# ---------------------------------------------------------------------------
+
+class TestDeleteInvoice:
+
+    def test_delete_existing_invoice(self, tools, cleanup_invoices):
+        """Delete an invoice — should return deleted: true and be gone from DB."""
+        inv = tools["create_invoice"].invoke({
+            "vendor_name": _tagged("Delete Test Vendor"),
+            "total": 250.00,
+            "invoice_date": "2026-01-01",
+            "currency": "EUR",
+        })
+        inv_id = inv["id"]
+
+        result = tools["delete_invoice"].invoke({"invoice_id": inv_id})
+        assert result.get("deleted") is True
+        assert result.get("invoice_id") == inv_id
+
+        # Verify gone from DB (maybe_single returns None when no row found)
+        gone = supabase.table("invoices").select("id").eq("id", inv_id).maybe_single().execute()
+        assert gone is None or gone.data is None
+
+    def test_delete_nonexistent_invoice(self, tools):
+        """Deleting a non-existent invoice should return an error."""
+        result = tools["delete_invoice"].invoke({
+            "invoice_id": "00000000-0000-0000-0000-000000000000",
+        })
+        assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# set_vendor_mapping
+# ---------------------------------------------------------------------------
+
+class TestSetVendorMapping:
+
+    @pytest.fixture(autouse=True)
+    def two_projects(self):
+        """Create 2 projects with categories — torn down after each test."""
+        cat_result = (
+            supabase.table("invoice_categories")
+            .select("id")
+            .eq("name", "Office Supplies")
+            .execute()
+        )
+        if cat_result.data:
+            category_id = cat_result.data[0]["id"]
+            created_category = False
+        else:
+            cat = (
+                supabase.table("invoice_categories")
+                .insert({"name": "Office Supplies"})
+                .execute()
+            )
+            category_id = cat.data[0]["id"]
+            created_category = True
+
+        projects = []
+        for i in range(2):
+            proj = (
+                supabase.table("projects")
+                .insert({
+                    "user_id": USER_ID,
+                    "name": f"Mapping Project {i + 1} {_RUN_TAG}",
+                    "status": "Active",
+                })
+                .execute()
+            )
+            project_id = proj.data[0]["id"]
+            supabase.table("project_categories").insert({
+                "project_id": project_id,
+                "category_id": category_id,
+                "budget": 1000,
+            }).execute()
+            projects.append({"id": project_id, "category_id": category_id})
+
+        self._projects = projects
+        yield
+
+        for p in projects:
+            supabase.table("vendor_mappings").delete().eq("project_id", p["id"]).execute()
+            supabase.table("project_categories").delete().eq("project_id", p["id"]).execute()
+            supabase.table("projects").delete().eq("id", p["id"]).execute()
+        if created_category:
+            supabase.table("invoice_categories").delete().eq("id", category_id).execute()
+
+    def test_set_vendor_mapping(self, tools):
+        """Save a vendor mapping and verify it is stored correctly."""
+        project_id = self._projects[0]["id"]
+        category_id = self._projects[0]["category_id"]
+        vendor = _tagged("Mapping Test Vendor")
+
+        result = tools["set_vendor_mapping"].invoke({
+            "vendor_name": vendor,
+            "project_id": project_id,
+            "category_id": category_id,
+        })
+        assert result.get("saved") is True
+        assert result.get("vendor_name") == vendor
+
+        mapping = (
+            supabase.table("vendor_mappings")
+            .select("*")
+            .eq("user_id", USER_ID)
+            .eq("vendor_name", vendor)
+            .maybe_single()
+            .execute()
+        )
+        assert mapping.data is not None
+        assert mapping.data["project_id"] == project_id
+
+    def test_set_vendor_mapping_upsert(self, tools):
+        """Setting the same vendor twice should update, not duplicate."""
+        p1_id = self._projects[0]["id"]
+        p2_id = self._projects[1]["id"]
+        c1_id = self._projects[0]["category_id"]
+        c2_id = self._projects[1]["category_id"]
+        vendor = _tagged("Upsert Mapping Vendor")
+
+        tools["set_vendor_mapping"].invoke({
+            "vendor_name": vendor,
+            "project_id": p1_id,
+            "category_id": c1_id,
+        })
+        tools["set_vendor_mapping"].invoke({
+            "vendor_name": vendor,
+            "project_id": p2_id,
+            "category_id": c2_id,
+        })
+
+        # Should only be one row, pointing at the second project
+        mappings = (
+            supabase.table("vendor_mappings")
+            .select("*")
+            .eq("user_id", USER_ID)
+            .eq("vendor_name", vendor)
+            .execute()
+        )
+        assert len(mappings.data) == 1
+        assert mappings.data[0]["project_id"] == p2_id
+
+
+# ---------------------------------------------------------------------------
+# create_project
+# ---------------------------------------------------------------------------
+
+class TestCreateProject:
+
+    @pytest.fixture(autouse=True)
+    def cleanup_projects(self):
+        """Delete projects created during each test."""
+        created_ids = []
+        self._created_ids = created_ids
+        yield
+        for proj_id in created_ids:
+            try:
+                supabase.table("projects").delete().eq("id", proj_id).execute()
+            except Exception:
+                pass
+
+    def test_create_project_name_only(self, tools):
+        """Minimal create — name only, no budget or description."""
+        name = _tagged("Minimal Project")
+        result = tools["create_project"].invoke({"name": name})
+
+        assert "error" not in result
+        assert result["name"] == name
+        assert result["status"] == "Active"
+        assert result["id"] is not None
+        self._created_ids.append(result["id"])
+
+        row = (
+            supabase.table("projects")
+            .select("*")
+            .eq("id", result["id"])
+            .maybe_single()
+            .execute()
+        )
+        assert row.data is not None
+        assert row.data["user_id"] == USER_ID
+
+    def test_create_project_with_budget_and_description(self, tools):
+        """Create project with all optional fields."""
+        name = _tagged("Full Project")
+        result = tools["create_project"].invoke({
+            "name": name,
+            "budget": 25000.0,
+            "description": "Feature film production — Spring 2026",
+        })
+
+        assert "error" not in result
+        assert result["name"] == name
+        assert result["budget"] == pytest.approx(25000.0)
+        assert result["description"] == "Feature film production — Spring 2026"
+        self._created_ids.append(result["id"])
+
+    def test_create_project_budget_zero(self, tools):
+        """Budget of zero is valid and should be stored."""
+        name = _tagged("Zero Budget Project")
+        result = tools["create_project"].invoke({"name": name, "budget": 0.0})
+
+        assert "error" not in result
+        assert result["budget"] == pytest.approx(0.0)
+        self._created_ids.append(result["id"])
+
+
+# ---------------------------------------------------------------------------
+# update_project
+# ---------------------------------------------------------------------------
+
+class TestUpdateProject:
+
+    @pytest.fixture(autouse=True)
+    def project(self):
+        """Create a project to update, delete it after."""
+        row = (
+            supabase.table("projects")
+            .insert({
+                "user_id": USER_ID,
+                "name": _tagged("Update Target Project"),
+                "status": "Active",
+                "budget": 10000.0,
+            })
+            .execute()
+        )
+        self._project = row.data[0]
+        yield
+        try:
+            supabase.table("projects").delete().eq("id", self._project["id"]).execute()
+        except Exception:
+            pass
+
+    def test_update_budget(self, tools):
+        """Update budget — other fields should be unchanged."""
+        result = tools["update_project"].invoke({
+            "project_id": self._project["id"],
+            "budget": 50000.0,
+        })
+
+        assert "error" not in result
+        assert result["budget"] == pytest.approx(50000.0)
+        assert result["name"] == self._project["name"]
+
+    def test_update_status_to_completed(self, tools):
+        """Mark project as Completed."""
+        result = tools["update_project"].invoke({
+            "project_id": self._project["id"],
+            "status": "Completed",
+        })
+
+        assert "error" not in result
+        assert result["status"] == "Completed"
+
+    def test_update_name(self, tools):
+        """Rename the project."""
+        new_name = _tagged("Renamed Project")
+        result = tools["update_project"].invoke({
+            "project_id": self._project["id"],
+            "name": new_name,
+        })
+
+        assert "error" not in result
+        assert result["name"] == new_name
+
+    def test_update_no_fields_returns_error(self, tools):
+        """Calling update with no fields should return an error."""
+        result = tools["update_project"].invoke({
+            "project_id": self._project["id"],
+        })
+
+        assert "error" in result
+
+    def test_update_nonexistent_project(self, tools):
+        """Unknown project ID should return an error."""
+        result = tools["update_project"].invoke({
+            "project_id": "00000000-0000-0000-0000-000000000000",
+            "budget": 9999.0,
+        })
+
+        assert "error" in result
+

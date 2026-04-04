@@ -7,6 +7,7 @@ the email reply agent.
 
 import asyncio
 import logging
+from datetime import date
 
 import httpx
 from langsmith import traceable
@@ -85,6 +86,7 @@ def _build_email_context(
 ) -> str:
     """Build the email context string that all agents receive."""
     return (
+        f"Today's date: {date.today().isoformat()}\n"
         f"From: {sender}\n"
         f"Subject: {subject}\n"
         f"Body: {body}\n"

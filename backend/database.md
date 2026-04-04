@@ -27,6 +27,7 @@
 | `known_vendors` | text[] | '{}' | Vendor names associated with this project |
 | `known_locations` | text[] | '{}' | Filming locations for project-matching |
 | `created_at` | timestamptz | now() | |
+| `ai_context` | text | nullable | Free-text context injected into agent prompts for project-matching |
 
 ### `invoice_categories`
 
@@ -166,6 +167,22 @@ Known email addresses and their classification. Created by the classifier on fir
 | `reachable` | boolean | true | false for noreply@, automated senders |
 | `created_at` | timestamptz | now() | |
 | `updated_at` | timestamptz | nullable | |
+
+### `vendor_mappings`
+
+Persists vendor→project/category assignments learned or set manually. When an invoice arrives from a known vendor, the agent can look up the mapping and auto-assign.
+
+| Column | Type | Default | Notes |
+|--------|------|---------|-------|
+| `id` | uuid PK | gen_random_uuid() | |
+| `user_id` | uuid FK → auth.users | | ON DELETE CASCADE |
+| `vendor_name` | text | | Exact vendor name (case-insensitive match at query time) |
+| `project_id` | uuid FK → projects | nullable | Target project |
+| `category_id` | uuid FK → invoice_categories | nullable | Target category within the project |
+| `created_at` | timestamptz | now() | |
+| `updated_at` | timestamptz | nullable | |
+
+UNIQUE constraint on (`user_id`, `vendor_name`).
 
 ### `chat_messages`
 

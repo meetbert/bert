@@ -41,7 +41,7 @@ def create_get_tools(user_id: str) -> list:
         """Fetch a single invoice by its database UUID (not the invoice_number).
         The invoice_id must be a UUID like '3f2a...'. Do NOT pass the
         human-readable invoice number (e.g. 'CI2023-001') — use
-        get_invoices_by_vendor to find invoices by other fields.
+        search_invoices to find invoices by other fields.
         Returns all columns as a dict, or null if not found."""
         try:
             result = (
@@ -54,20 +54,6 @@ def create_get_tools(user_id: str) -> list:
         except Exception:
             return None
         return result.data[0] if result.data else None
-
-    @tool
-    def get_invoices_by_vendor(vendor_name: str) -> list[dict]:
-        """Find all invoices from a given vendor (case-insensitive match).
-        Useful for checking vendor history and past project assignments.
-        Returns a list of invoice dicts, or an empty list if none match."""
-        result = (
-            supabase.table("invoices")
-            .select("*")
-            .eq("user_id", user_id)
-            .ilike("vendor_name", vendor_name)
-            .execute()
-        )
-        return result.data
 
     # ------------------------------------------------------------------
     # Project tools
@@ -101,6 +87,7 @@ def create_get_tools(user_id: str) -> list:
     @tool
     def search_invoices(
         vendor_name: str = "",
+        invoice_number: str = "",
         keyword: str = "",
         payment_status: str = "",
         date_from: str = "",
@@ -108,22 +95,27 @@ def create_get_tools(user_id: str) -> list:
         min_amount: float = 0,
         max_amount: float = 0,
         currency: str = "",
+        project_id: str = "",
     ) -> list[dict]:
         """Search invoices with optional filters. All parameters are optional.
         vendor_name: partial match on vendor name (e.g. 'Tom Brown').
+        invoice_number: exact match on invoice number (e.g. 'INV-001').
         keyword: search term matched against description and line items (e.g. 'paint', 'camera').
         payment_status: filter by status — 'unpaid', 'paid', or 'overdue'.
         date_from / date_to: YYYY-MM-DD, filter by invoice_date.
         min_amount / max_amount: filter by total amount (0 = no limit).
         currency: 3-letter ISO code to filter by currency (e.g. 'GBP', 'USD').
+        project_id: UUID of a project to filter invoices by project.
         Returns matching invoices sorted newest-first."""
         query = (
             supabase.table("invoices")
-            .select("id, vendor_name, total, invoice_date, due_date, currency, invoice_number, payment_status, project_id, description, line_items")
+            .select("id, vendor_name, total, invoice_date, due_date, currency, invoice_number, payment_status, project_id, category_id, processing_status, description, line_items")
             .eq("user_id", user_id)
         )
         if vendor_name:
             query = query.ilike("vendor_name", f"%{vendor_name}%")
+        if invoice_number:
+            query = query.eq("invoice_number", invoice_number)
         if payment_status:
             query = query.eq("payment_status", payment_status)
         if date_from:
@@ -136,6 +128,8 @@ def create_get_tools(user_id: str) -> list:
             query = query.lte("total", max_amount)
         if currency:
             query = query.eq("currency", currency.upper())
+        if project_id:
+            query = query.eq("project_id", project_id)
         result = query.order("invoice_date", desc=True).execute()
         invoices = result.data or []
 
@@ -149,21 +143,6 @@ def create_get_tools(user_id: str) -> list:
 
         return invoices
 
-    @tool
-    def get_invoices_by_project(project_id: str, payment_status: str = "") -> list[dict]:
-        """Get all invoices for a specific project UUID.
-        Optionally filter by payment_status ('unpaid', 'paid', 'overdue').
-        Returns id, vendor_name, total, invoice_date, currency, invoice_number, payment_status."""
-        query = (
-            supabase.table("invoices")
-            .select("id, vendor_name, total, invoice_date, due_date, currency, invoice_number, payment_status")
-            .eq("user_id", user_id)
-            .eq("project_id", project_id)
-        )
-        if payment_status:
-            query = query.eq("payment_status", payment_status)
-        result = query.order("invoice_date", desc=True).execute()
-        return result.data or []
 
     @tool
     def get_vendor_summary(vendor_name: str) -> dict:
@@ -306,24 +285,30 @@ def create_get_tools(user_id: str) -> list:
         Returns project name, budget, total_invoiced, total_paid, total_outstanding,
         and whether the project is over budget.
         Use this for 'am I over budget on X?' or 'what did project X cost in total?'"""
-        proj_result = (
-            supabase.table("projects")
-            .select("id, name, budget, status")
-            .eq("id", project_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
+        try:
+            proj_result = (
+                supabase.table("projects")
+                .select("id, name, budget, status")
+                .eq("id", project_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+        except Exception as exc:
+            return {"error": f"project_id must be a UUID from get_projects. Got: {project_id!r}. Details: {exc}"}
         project = proj_result.data[0] if proj_result.data else None
         if not project:
             return {"error": "Project not found"}
 
-        inv_result = (
-            supabase.table("invoices")
-            .select("total, payment_status")
-            .eq("user_id", user_id)
-            .eq("project_id", project_id)
-            .execute()
-        )
+        try:
+            inv_result = (
+                supabase.table("invoices")
+                .select("total, payment_status")
+                .eq("user_id", user_id)
+                .eq("project_id", project_id)
+                .execute()
+            )
+        except Exception as exc:
+            return {"error": f"project_id must be a UUID from get_projects. Got: {project_id!r}. Details: {exc}"}
         invoices = inv_result.data or []
 
         total_invoiced = sum(float(inv.get("total") or 0) for inv in invoices)
@@ -356,23 +341,6 @@ def create_get_tools(user_id: str) -> list:
         return result.data
 
     # ------------------------------------------------------------------
-    # User tools
-    # ------------------------------------------------------------------
-
-    @tool
-    def get_user_settings() -> dict | None:
-        """Get the current user's settings including max_followups,
-        base_currency, and notification preferences. Returns null if
-        no settings exist."""
-        result = (
-            supabase.table("user_settings")
-            .select("*")
-            .eq("id", user_id)
-            .execute()
-        )
-        return result.data[0] if result.data else None
-
-    # ------------------------------------------------------------------
     # Follow-up tools
     # ------------------------------------------------------------------
 
@@ -393,13 +361,16 @@ def create_get_tools(user_id: str) -> list:
         Also returns: missing_sender_fields, follow_up_count, max_followups,
         sender_reachable, cooldown_ok."""
         # Fetch the invoice
-        result = (
-            supabase.table("invoices")
-            .select("*")
-            .eq("id", invoice_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
+        try:
+            result = (
+                supabase.table("invoices")
+                .select("*")
+                .eq("id", invoice_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+        except Exception as exc:
+            return {"error": f"invoice_id must be a UUID from create_invoice or search_invoices. Got: {invoice_id!r}. Details: {exc}"}
         invoice = result.data[0] if result.data else None
 
         if not invoice:
@@ -460,9 +431,7 @@ def create_get_tools(user_id: str) -> list:
 
     return [
         get_invoice,
-        get_invoices_by_vendor,
         search_invoices,
-        get_invoices_by_project,
         get_vendor_summary,
         get_spend_summary,
         get_due_soon,
@@ -470,6 +439,5 @@ def create_get_tools(user_id: str) -> list:
         get_projects,
         get_categories,
         get_project_documents,
-        get_user_settings,
         get_follow_up_state,
     ]

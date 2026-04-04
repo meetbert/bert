@@ -7,6 +7,7 @@ runs the shared pipeline, and returns a chat-friendly reply.
 
 import logging
 import os
+from datetime import date
 
 from langsmith import traceable
 
@@ -55,7 +56,7 @@ def _build_chat_context(
     history: list[dict],
 ) -> str:
     """Build the chat context string for the pipeline."""
-    parts = ["Source: Chat"]
+    parts = [f"Source: Chat\nToday's date: {date.today().isoformat()}"]
 
     if history:
         lines = []

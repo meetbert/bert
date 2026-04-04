@@ -9,17 +9,14 @@ Integration tests verify the full classifier pipeline including:
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from app.agents.config import supabase
 from app.agents.subagents.classifier import _parse_tasks, run_classifier
-
-USER_ID = "cf08829b-9f8a-4448-b3b3-666391e469c0"
+from .conftest import USER_ID
 
 _RUN_TAG = f"[test-{uuid.uuid4().hex[:8]}]"
-_TEST_MARKER = "[test-"
 
 
 # ---------------------------------------------------------------------------
@@ -52,27 +49,6 @@ def _make_email(
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="module", autouse=True)
-def sweep_orphan_contacts():
-    """Delete orphaned test contacts older than 1 hour."""
-    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-
-    old_contacts = (
-        supabase.table("email_contacts")
-        .select("id")
-        .eq("user_id", USER_ID)
-        .ilike("email", f"%{_TEST_MARKER}%")
-        .lt("created_at", one_hour_ago)
-        .execute()
-    )
-    for c in old_contacts.data:
-        try:
-            supabase.table("email_contacts").delete().eq("id", c["id"]).execute()
-        except Exception:
-            pass
-    yield
-
 
 @pytest.fixture()
 def cleanup_contacts():

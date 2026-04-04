@@ -259,20 +259,32 @@ const Dashboard = () => {
                 const isOverBudget = pct > 100;
 
                 // Per-category spend — seed with categories assigned to this project
+                const isCategoryMode = p.budget_mode === 'category';
+                const projCats = projectCategories.filter(pc => pc.project_id === p.id);
                 const catMap: Record<string, number> = {};
-                const projCatIds = projectCategories.filter(pc => pc.project_id === p.id).map(pc => pc.category_id);
-                projCatIds.forEach((cid) => { catMap[cid] = 0; });
+                projCats.forEach((pc) => { catMap[pc.category_id] = 0; });
                 projectInvoices.forEach((i) => {
-                  const cid = i.category_id ?? '__uncategorized';
+                  const cid = (i.category_id && projCats.some(pc => pc.category_id === i.category_id))
+                    ? i.category_id
+                    : '__uncategorized';
                   catMap[cid] = (catMap[cid] ?? 0) + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates);
                 });
                 const catRows = Object.entries(catMap)
-                  .map(([cid, amount]) => ({
-                    id: cid,
-                    name: cid === '__uncategorized' ? 'Uncategorized' : categories.find(c => c.id === cid)?.name ?? 'Unknown',
-                    amount,
-                    pct: hasBudget(p) ? (amount / p.budget!) * 100 : (spent > 0 ? (amount / spent) * 100 : 0),
-                  }))
+                  .map(([cid, amount]) => {
+                    const catBudget = isCategoryMode
+                      ? (projCats.find(pc => pc.category_id === cid)?.budget ?? 0)
+                      : 0;
+                    const catPct = isCategoryMode
+                      ? (catBudget > 0 ? (amount / catBudget) * 100 : 0)
+                      : (hasBudget(p) ? (amount / p.budget!) * 100 : (spent > 0 ? (amount / spent) * 100 : 0));
+                    return {
+                      id: cid,
+                      name: cid === '__uncategorized' ? 'Uncategorized' : categories.find(c => c.id === cid)?.name ?? 'Unknown',
+                      amount,
+                      catBudget,
+                      pct: Math.min(catPct, 100),
+                    };
+                  })
                   .sort((a, b) => b.amount - a.amount);
 
                 return (
@@ -316,7 +328,12 @@ const Dashboard = () => {
                               <div key={cat.id}>
                                 <div className="flex items-center justify-between text-xs mb-1">
                                   <span className="text-muted-foreground">{cat.name}</span>
-                                  <span className="font-medium">{formatCurrency(cat.amount, baseCurrency)}</span>
+                                  <span className="font-medium">
+                                    {formatCurrency(cat.amount, baseCurrency)}
+                                    {isCategoryMode && cat.catBudget > 0 && (
+                                      <span className="text-muted-foreground font-normal"> / {formatCurrency(cat.catBudget, baseCurrency)}</span>
+                                    )}
+                                  </span>
                                 </div>
                                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
                                   <div

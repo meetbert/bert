@@ -21,12 +21,14 @@
 | `id` | uuid PK | gen_random_uuid() | |
 | `user_id` | uuid FK → auth.users | | Owner of this project |
 | `name` | text | | |
-| `budget` | numeric | 0 | CHECK: >= 0. User-defined total budget. Category budgets in `project_categories` are the breakdown |
+| `budget` | numeric | 0 | CHECK: >= 0. Always the authoritative budget figure. In 'category' mode kept in sync by `trg_sync_project_budget`. |
+| `budget_mode` | text | 'total' | CHECK: 'total', 'category'. Controls whether budget is one total or split by category |
 | `status` | text | 'Active' | CHECK: 'Active', 'Completed', 'Archived' |
 | `description` | text | nullable | Context for agent project-matching |
 | `known_vendors` | text[] | '{}' | Vendor names associated with this project |
 | `known_locations` | text[] | '{}' | Filming locations for project-matching |
 | `created_at` | timestamptz | now() | |
+| `updated_at` | timestamptz | now() | Set by application code on every update |
 | `ai_context` | text | nullable | Free-text context injected into agent prompts for project-matching |
 
 ### `invoice_categories`
@@ -48,14 +50,40 @@ Junction table. Each project selects categories during onboarding and assigns a 
 |--------|------|---------|-------|
 | `id` | uuid PK | gen_random_uuid() | |
 | `project_id` | uuid FK → projects | | |
-| `category_id` | uuid FK → invoice_categories | | |
+| `category_id` | uuid FK → invoice_categories | | NOT NULL |
 | `budget` | float8 | 0 | CHECK: >= 0. Budget allocated to this category within this project |
 | `created_at` | timestamptz | now() | |
 
 UNIQUE constraint on (`project_id`, `category_id`).
 
-> **Total project budget** = `SELECT SUM(budget) FROM project_categories WHERE project_id = ?`
+> **Budget in 'total' mode** = `projects.budget` (single figure set by user)
+> **Budget in 'category' mode** = `projects.budget` kept in sync automatically by trigger `trg_sync_project_budget` (see below)
 > **Spend per category** = `SELECT SUM(i.total) FROM invoices i WHERE i.project_id = ? AND i.category_id = ?`
+
+#### Trigger: `trg_sync_project_budget`
+
+Fires `AFTER INSERT OR UPDATE OR DELETE` on `project_categories`. When `budget_mode = 'category'`, recalculates `SUM(project_categories.budget)` for the affected project and writes it to `projects.budget`. This keeps `projects.budget` as the single source of truth in both modes — the frontend and agents always read `projects.budget` regardless of mode.
+
+```sql
+CREATE OR REPLACE FUNCTION sync_project_budget()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE projects
+  SET budget = (
+    SELECT COALESCE(SUM(budget), 0)
+    FROM project_categories
+    WHERE project_id = COALESCE(NEW.project_id, OLD.project_id)
+  )
+  WHERE id = COALESCE(NEW.project_id, OLD.project_id)
+    AND budget_mode = 'category';
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_sync_project_budget
+AFTER INSERT OR UPDATE OR DELETE ON project_categories
+FOR EACH ROW EXECUTE FUNCTION sync_project_budget();
+```
 
 ### `project_documents`
 

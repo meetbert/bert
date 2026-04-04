@@ -282,13 +282,14 @@ def create_get_tools(user_id: str) -> list:
     @tool
     def get_project_spend(project_id: str) -> dict:
         """Get budget vs actual spend for a project.
-        Returns project name, budget, total_invoiced, total_paid, total_outstanding,
+        Returns project name, budget_mode, total_invoiced, total_paid, total_outstanding,
         and whether the project is over budget.
+        In 'category' mode also returns per-category spend vs budget.
         Use this for 'am I over budget on X?' or 'what did project X cost in total?'"""
         try:
             proj_result = (
                 supabase.table("projects")
-                .select("id, name, budget, status")
+                .select("id, name, budget, budget_mode, status")
                 .eq("id", project_id)
                 .eq("user_id", user_id)
                 .execute()
@@ -302,7 +303,7 @@ def create_get_tools(user_id: str) -> list:
         try:
             inv_result = (
                 supabase.table("invoices")
-                .select("total, payment_status")
+                .select("total, payment_status, category_id")
                 .eq("user_id", user_id)
                 .eq("project_id", project_id)
                 .execute()
@@ -314,18 +315,59 @@ def create_get_tools(user_id: str) -> list:
         total_invoiced = sum(float(inv.get("total") or 0) for inv in invoices)
         total_paid = sum(float(inv.get("total") or 0) for inv in invoices if inv.get("payment_status") == "paid")
         total_outstanding = sum(float(inv.get("total") or 0) for inv in invoices if inv.get("payment_status") in ("unpaid", "overdue"))
+        budget_mode = project.get("budget_mode", "total")
         budget = float(project.get("budget") or 0)
 
-        return {
+        result = {
             "project_name": project["name"],
-            "budget": budget,
+            "budget_mode": budget_mode,
             "total_invoiced": total_invoiced,
             "total_paid": total_paid,
             "total_outstanding": total_outstanding,
-            "remaining_budget": budget - total_invoiced,
-            "over_budget": total_invoiced > budget if budget > 0 else False,
             "invoice_count": len(invoices),
         }
+
+        if budget_mode == "category":
+            # Fetch category budgets and names
+            cat_result = (
+                supabase.table("project_categories")
+                .select("category_id, budget, invoice_categories(name)")
+                .eq("project_id", project_id)
+                .execute()
+            )
+            categories = cat_result.data or []
+            total_category_budget = sum(float(c.get("budget") or 0) for c in categories)
+
+            # Spend per category
+            by_category: dict[str, float] = defaultdict(float)
+            for inv in invoices:
+                cid = inv.get("category_id") or "unassigned"
+                by_category[cid] += float(inv.get("total") or 0)
+
+            category_breakdown = []
+            for cat in categories:
+                cid = cat["category_id"]
+                cat_name = (cat.get("invoice_categories") or {}).get("name", cid)
+                cat_budget = float(cat.get("budget") or 0)
+                cat_spend = by_category.get(cid, 0)
+                category_breakdown.append({
+                    "category": cat_name,
+                    "budget": cat_budget,
+                    "invoiced": cat_spend,
+                    "remaining": cat_budget - cat_spend,
+                    "over_budget": cat_spend > cat_budget if cat_budget > 0 else False,
+                })
+
+            result["total_budget"] = total_category_budget
+            result["remaining_budget"] = total_category_budget - total_invoiced
+            result["over_budget"] = total_invoiced > total_category_budget if total_category_budget > 0 else False
+            result["by_category"] = category_breakdown
+        else:
+            result["budget"] = budget
+            result["remaining_budget"] = budget - total_invoiced
+            result["over_budget"] = total_invoiced > budget if budget > 0 else False
+
+        return result
 
     @tool
     def get_project_documents(project_id: str) -> list[dict]:

@@ -127,9 +127,9 @@ export const ProjectEditDialog = ({
       const selected = new Map<string, number>();
       projCats.forEach(pc => selected.set(pc.category_id, pc.budget ?? 0));
       setSelectedCategories(selected);
-      const hasCategoryBudgets = projCats.some(pc => (pc.budget ?? 0) > 0);
-      setBudgetMode(hasCategoryBudgets ? 'category' : 'total');
-      setManualBudget(hasCategoryBudgets ? '' : (project.budget > 0 ? String(project.budget) : ''));
+      const mode = project.budget_mode ?? 'total';
+      setBudgetMode(mode);
+      setManualBudget(mode === 'total' ? (project.budget > 0 ? String(project.budget) : '') : '');
       return;
     }
 
@@ -153,9 +153,9 @@ export const ProjectEditDialog = ({
       });
       setSelectedCategories(selected);
 
-      const hasCategoryBudgets = (projCats.data ?? []).some((pc: any) => (pc.budget ?? 0) > 0);
-      setBudgetMode(hasCategoryBudgets ? 'category' : 'total');
-      setManualBudget(hasCategoryBudgets ? '' : (project.budget > 0 ? String(project.budget) : ''));
+      const mode = project.budget_mode ?? 'total';
+      setBudgetMode(mode);
+      setManualBudget(mode === 'total' ? (project.budget > 0 ? String(project.budget) : '') : '');
     });
   }, [open, project.id]);
 
@@ -329,6 +329,7 @@ export const ProjectEditDialog = ({
         description: description.trim() || null,
         status,
         budget: budgetToSave,
+        budget_mode: budgetMode,
         known_vendors: parseList(knownVendors),
         known_locations: parseList(knownLocations),
       });
@@ -352,6 +353,7 @@ export const ProjectEditDialog = ({
           known_locations: parseList(knownLocations),
           status,
           budget: budgetToSave,
+          budget_mode: budgetMode,
         })
         .eq('id', project.id);
       if (projError) throw projError;

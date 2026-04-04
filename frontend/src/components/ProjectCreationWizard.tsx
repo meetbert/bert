@@ -262,6 +262,7 @@ export const ProjectCreationWizard = ({
         description: description.trim() || null,
         status: 'Active',
         budget: budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget,
+        budget_mode: budgetMode,
         known_vendors: parseList(knownVendors),
         known_locations: parseList(knownLocations),
         ai_context: null,
@@ -299,6 +300,7 @@ export const ProjectCreationWizard = ({
           known_locations: parseList(knownLocations),
           status: 'Active',
           budget: budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget,
+          budget_mode: budgetMode,
           user_id: user.id,
         })
         .select('id')

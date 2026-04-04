@@ -350,9 +350,9 @@ const Invoices = () => {
                         )}
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                        <Select value={inv.category_id ?? 'unassigned'} onValueChange={(v) => v === 'unassigned' ? unassignCategory(inv.id) : assignCategory(inv.id, v)}>
+                        <Select value={inv.category_id && categories.some(c => c.id === inv.category_id) ? inv.category_id : 'unassigned'} onValueChange={(v) => v === 'unassigned' ? unassignCategory(inv.id) : assignCategory(inv.id, v)}>
                           <SelectTrigger className="h-7 w-36 text-xs border-dashed justify-between text-left">
-                            <SelectValue placeholder="Assign" />
+                            <SelectValue placeholder="" />
                           </SelectTrigger>
                           <SelectContent position="popper" sideOffset={4}>
                             <SelectItem value="unassigned" className="text-muted-foreground">Unassigned</SelectItem>
@@ -364,7 +364,7 @@ const Invoices = () => {
                         <div className="flex items-center gap-1.5">
                           <Select value={inv.project_id ?? 'unassigned'} onValueChange={(v) => v === 'unassigned' ? unassignProject(inv.id) : assignProject(inv.id, v)}>
                             <SelectTrigger className="h-7 w-36 text-xs border-dashed justify-between text-left">
-                              <SelectValue placeholder="Assign" />
+                              <SelectValue placeholder="" />
                             </SelectTrigger>
                             <SelectContent position="popper" sideOffset={4}>
                               <SelectItem value="unassigned" className="text-muted-foreground">Unassigned</SelectItem>

@@ -2,6 +2,7 @@ export interface Project {
   id: string;
   name: string;
   budget: number;
+  budget_mode: 'total' | 'category';
   status: 'Active' | 'Completed' | 'Archived';
   description: string | null;
   ai_context: string | null;

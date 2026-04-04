@@ -560,6 +560,17 @@ def create_action_tools(user_id: str) -> list:
         if category_id is not None and project_id is None:
             return {"error": "category_id requires project_id — categories are scoped to projects. Provide the project_id and verify via get_categories that this category belongs to it."}
 
+        if category_id is not None and project_id is not None:
+            valid = (
+                supabase.table("project_categories")
+                .select("id")
+                .eq("project_id", project_id)
+                .eq("category_id", category_id)
+                .execute()
+            )
+            if not valid.data:
+                return {"error": f"category_id {category_id!r} is not configured for project {project_id!r}. Call get_categories to see valid categories for this project."}
+
         # Update the invoice row
         try:
             result = (
@@ -605,18 +616,22 @@ def create_action_tools(user_id: str) -> list:
     def create_project(
         name: str,
         budget: float | None = None,
+        budget_mode: str = "total",
         description: str | None = None,
     ) -> dict:
         """Create a new project for the user.
 
         Use this when the user asks to create a new project, e.g.
         'create a project called Brighton Shoot with a £20k budget'.
+        budget_mode: 'total' (one overall budget) or 'category' (budget
+        split across expense categories). Defaults to 'total'.
         Returns the created project including its id.
         """
         row = {
             "user_id": user_id,
             "name": name,
             "status": "Active",
+            "budget_mode": budget_mode,
         }
         if budget is not None:
             row["budget"] = budget
@@ -694,12 +709,14 @@ def create_action_tools(user_id: str) -> list:
         project_id: str,
         name: str | None = None,
         budget: float | None = None,
+        budget_mode: str | None = None,
         status: str | None = None,
         description: str | None = None,
     ) -> dict:
-        """Update a project's name, budget, status, or description.
+        """Update a project's name, budget, budget_mode, status, or description.
 
         status must be 'Active' or 'Completed'.
+        budget_mode must be 'total' or 'category'.
         Use this for commands like 'change the Whitby project budget to £25k'
         or 'mark Wild Ocean Series as complete'.
         Returns the updated project."""
@@ -708,6 +725,8 @@ def create_action_tools(user_id: str) -> list:
             updates["name"] = name
         if budget is not None:
             updates["budget"] = budget
+        if budget_mode is not None:
+            updates["budget_mode"] = budget_mode
         if status is not None:
             updates["status"] = status
         if description is not None:

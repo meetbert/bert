@@ -446,9 +446,10 @@ export const ProjectCreationWizard = ({
             <Textarea
               value={knownLocations}
               onChange={(e) => setKnownLocations(e.target.value)}
-              placeholder="e.g. Pinewood Studios, Location X, London"
+              placeholder="e.g. Wales, Pembrokeshire, Tenby, Brides Glen, Pinewood Studios"
               className="min-h-[56px] resize-none text-sm"
             />
+            <p className="text-xs text-muted-foreground">Add nearby towns, villages, and venues — not just the main location. Receipts from local restaurants, shops, and suppliers will be matched against these.</p>
           </div>
 
           {isDemoMode ? (

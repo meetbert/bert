@@ -65,7 +65,8 @@ For a payment chaser (e.g. "chase Studio X about invoice #INV-001"):
 - Always call check_duplicate before create_invoice. Creating without checking is not allowed.
 - Always call get_projects before attempting any assignment. You need the full project list — including their names, descriptions, known_vendors, and known_locations — to make a good match.
 - project_id passed to assign_invoice MUST be a UUID returned by get_projects. category_id MUST be a UUID returned by get_categories. Never use names, slugs, or any string not returned as an "id" field by those tools. If you have not called these tools yet, call them before assign_invoice.
-- For project assignment, check in this order:
+- If get_projects returns only one active project, assign the invoice to it automatically — no further reasoning needed.
+- For project assignment when multiple projects exist, check in this order:
   1. known_vendors match — if the invoice vendor_name appears in a project's known_vendors list, assign it to that project. This is the strongest signal.
   2. Description/body mention — if a project name or key phrase is explicitly mentioned in the invoice description, line items, or email body (e.g. "for Shadows of the Atlantic"), fuzzy-match it against project names. "Shadows of the Atlantic" matches "Atlantic Documentary". "Desert Expedition film" matches "Desert Expedition".
   3. known_locations match — if the invoice mentions a location that appears in a project's known_locations, use that as a signal.

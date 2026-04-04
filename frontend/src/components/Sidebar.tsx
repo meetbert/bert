@@ -116,7 +116,7 @@ export const Sidebar = () => {
                 )}
               </button>
             </PopoverTrigger>
-            <PopoverContent side="top" align="start" className="w-44 p-1">
+            <PopoverContent side="top" align="start" className="p-1" style={{ width: 'var(--radix-popper-anchor-width)' }}>
               <button
                 onClick={() => navigate('/settings')}
                 className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors"

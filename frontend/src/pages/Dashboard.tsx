@@ -274,9 +274,11 @@ const Dashboard = () => {
                     const catBudget = isCategoryMode
                       ? (projCats.find(pc => pc.category_id === cid)?.budget ?? 0)
                       : 0;
-                    const catPct = isCategoryMode
-                      ? (catBudget > 0 ? (amount / catBudget) * 100 : 0)
-                      : (hasBudget(p) ? (amount / p.budget!) * 100 : (spent > 0 ? (amount / spent) * 100 : 0));
+                    const catPct = cid === '__uncategorized' && isCategoryMode
+                      ? 100
+                      : isCategoryMode
+                        ? (catBudget > 0 ? (amount / catBudget) * 100 : 0)
+                        : (hasBudget(p) ? (amount / p.budget!) * 100 : (spent > 0 ? (amount / spent) * 100 : 0));
                     return {
                       id: cid,
                       name: cid === '__uncategorized' ? 'Uncategorized' : categories.find(c => c.id === cid)?.name ?? 'Unknown',
@@ -285,7 +287,11 @@ const Dashboard = () => {
                       pct: Math.min(catPct, 100),
                     };
                   })
-                  .sort((a, b) => b.amount - a.amount);
+                  .sort((a, b) => {
+                    if (a.id === '__uncategorized') return 1;
+                    if (b.id === '__uncategorized') return -1;
+                    return b.amount - a.amount;
+                  });
 
                 return (
                   <Link key={p.id} to={`/projects/${p.id}`}>

@@ -265,26 +265,27 @@ async def test_invoice_project_and_category(tag, invoice_ids, project_ids):
     proj_id = proj.data[0]["id"]
     project_ids.append(proj_id)
 
-    # Seed a few project_categories so get_categories returns results for this project
-    global_cats = (
+    # Seed the Equipment category for this project — gives the agent an unambiguous match
+    equip_cat = (
         supabase.table("invoice_categories")
         .select("id, name")
-        .limit(3)
+        .eq("name", "Equipment")
+        .single()
         .execute()
     ).data
     seeded_cat_ids = []
-    for cat in global_cats:
-        row = (
-            supabase.table("project_categories")
-            .insert({"project_id": proj_id, "category_id": cat["id"], "budget": 2000})
-            .execute()
-        )
-        seeded_cat_ids.append(row.data[0]["id"])
+    row = (
+        supabase.table("project_categories")
+        .insert({"project_id": proj_id, "category_id": equip_cat["id"], "budget": 5000})
+        .execute()
+    )
+    seeded_cat_ids.append(row.data[0]["id"])
+    equip_cat_id = equip_cat["id"]
 
     inv_num = f"ARRI-{tag[6:-1]}"
     context = _chat(
-        f"New invoice {inv_num} from {vendor} for €500 EUR. Please record it and assign it "
-        f"to the project '{project_name}'."
+        f"New invoice {inv_num} from {vendor} for €500 EUR for camera equipment rental. "
+        f"Please record it and assign it to the project '{project_name}'."
     )
 
     pipeline_result, reply = await _run_chat(USER_ID, context)
@@ -302,7 +303,7 @@ async def test_invoice_project_and_category(tag, invoice_ids, project_ids):
     invoice_ids.append(inv["id"])
 
     assert inv["project_id"] == proj_id
-    assert inv["category_id"] is not None
+    assert inv["category_id"] == equip_cat_id
 
     # Cleanup seeded project_categories
     for cat_id in seeded_cat_ids:

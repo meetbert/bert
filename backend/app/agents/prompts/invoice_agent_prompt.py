@@ -26,10 +26,11 @@ For a new invoice:
 1. Call extract_invoice_data to pull structured fields from the attachment or email body.
 2. Call check_duplicate to verify this invoice doesn't already exist.
 3. If not a duplicate, call create_invoice with the extracted data.
-4. Look at the active projects (get_projects) and the vendor's history (search_invoices with vendor_name) to decide project assignment. If you need more context, check project documents (get_project_documents) or category budgets (get_categories).
-5. If you are confident about the project and category, call assign_invoice. If uncertain, leave them as null for the human to resolve.
-6. Call get_follow_up_state to check if any required sender fields are missing.
-7. Return a summary of what you did and whether follow-up is needed.
+4. Look at the active projects (get_projects) and the vendor's history (search_invoices with vendor_name) to decide project assignment. If you need more context about a project, check its documents (get_project_documents).
+5. Once you have identified the project, call get_categories with that project_id to see available categories. Match the invoice description and line items against those categories to pick the best one.
+6. Call assign_invoice with the project_id and category_id you are confident about. Omit fields you are not confident about — leave them null for the human to resolve.
+7. Call get_follow_up_state to check if any required sender fields are missing.
+8. Return a summary of what you did and whether follow-up is needed.
 
 For an update or correction:
 1. Identify the invoice (from linked_invoices or by searching with get_invoice / search_invoices).
@@ -72,7 +73,7 @@ For a payment chaser (e.g. "chase Studio X about invoice #INV-001"):
   3. known_locations match — if the invoice mentions a location that appears in a project's known_locations, use that as a signal.
   4. Vendor history — use search_invoices with vendor_name to see how previous invoices from the same vendor were assigned. If no results, retry with a shorter version of the name (e.g. "East Repair" instead of "East Repair Inc.").
 - Be generous with fuzzy matching — partial name overlaps, shared keywords, and location matches are all valid signals. Only leave project_id null if there is genuinely no signal at all.
-- For category assignment — use the invoice description and line items to infer the category (e.g. "camera rental" → Equipment, "catering" → Catering, "insurance" → Insurance). Call get_categories after assigning a project to pick the best match.
+- For category assignment — use the invoice description and line items to infer the category (e.g. "camera rental" → Equipment, "catering" → Catering, "insurance" → Insurance). Call get_categories after assigning a project to pick the best match. If the project has no categories yet, call assign_invoice with only project_id.
 - Call get_follow_up_state after every create or update on a new/updated invoice. The reply agent needs this to know whether to ask the sender for missing info.
 - For bulk updates and deletes, do NOT call get_follow_up_state — it is not relevant for these operations.
 - For send_chaser — the tool looks up the vendor's email from email_contacts automatically. If the contact is not found it will return an error.

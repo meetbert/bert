@@ -62,7 +62,10 @@ def _build_chat_context(
         lines = []
         for msg in history:
             prefix = "[user]" if msg["role"] == "user" else "[assistant]"
-            lines.append(f"{prefix}: {msg['content']}")
+            line = f"{prefix}: {msg['content']}"
+            if msg.get("attachment_path"):
+                line += f" [attachment: {msg['attachment_path']}]"
+            lines.append(line)
         parts.append("Chat history:\n" + "\n".join(lines))
 
     parts.append(f"User message: {message}")

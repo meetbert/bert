@@ -529,28 +529,42 @@ def create_action_tools(user_id: str) -> list:
     @tool
     def assign_invoice(
         invoice_id: str,
-        project_id: str,
-        category_id: str,
+        project_id: str | None = None,
+        category_id: str | None = None,
     ) -> dict:
-        """Assign an invoice to a project and expense category.
+        """Assign an invoice to a project and/or expense category.
 
-        Sets project_id and category_id on the invoice. If the invoice has
-        a document, moves it in storage from unassigned/ to the project folder.
+        Pass only the fields you are confident about — omit the rest.
+        If the project has no categories, pass project_id only.
+        category_id requires project_id — categories are scoped to projects.
+        If you want to assign only a category, you must also specify the
+        project_id and verify via get_categories that the category belongs
+        to that project before calling this tool.
+        If the invoice has a document, moves it in storage from unassigned/
+        to the project folder.
         Call this after reasoning about which project and category fit best
         using get_projects, get_categories, get_project_documents, and
         search_invoices (vendor history).
         project_id and category_id MUST be UUIDs returned by get_projects /
         get_categories — never pass a name or guessed value.
         """
+        updates: dict = {"updated_at": "now()"}
+        if project_id is not None:
+            updates["project_id"] = project_id
+        if category_id is not None:
+            updates["category_id"] = category_id
+
+        if len(updates) == 1:
+            return {"error": "Nothing to assign — provide at least project_id or category_id"}
+
+        if category_id is not None and project_id is None:
+            return {"error": "category_id requires project_id — categories are scoped to projects. Provide the project_id and verify via get_categories that this category belongs to it."}
+
         # Update the invoice row
         try:
             result = (
                 supabase.table("invoices")
-                .update({
-                    "project_id": project_id,
-                    "category_id": category_id,
-                    "updated_at": "now()",
-                })
+                .update(updates)
                 .eq("id", invoice_id)
                 .eq("user_id", user_id)
                 .execute()

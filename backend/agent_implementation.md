@@ -180,7 +180,7 @@ Processes everything invoice-related: new invoices, updates, corrections, follow
 **Tools:** `get_invoice`, `search_invoices`, `get_projects`, `get_categories`, `get_project_documents`, `get_follow_up_state`, `extract_invoice_data`, `check_duplicate`, `create_invoice`, `update_invoice`, `assign_invoice`, `bulk_update_invoices`, `delete_invoice`, `set_vendor_mapping`
 
 **System prompt guidance:**
-- For new invoices: extract → check_duplicate → create (pass thread_id to link email thread) → assign project + category → get_follow_up_state to check what's missing
+- For new invoices: extract → check_duplicate → create (pass thread_id to link email thread) → assign project and/or category (only what the agent is confident about) → get_follow_up_state to check what's missing
 - For updates/corrections: identify the invoice → update fields (pass thread_id to link additional threads) → re-evaluate assignment if key fields changed
 - For assignment: query project context, vendor history, onboarding docs. If confident → assign. If not → leave NULL for human.
 - Always call check_duplicate before create_invoice

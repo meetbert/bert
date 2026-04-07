@@ -209,7 +209,7 @@ const InvoiceDetail = () => {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold">{invoice.vendor_name}</h1>
+              <h1 className="text-3xl font-bold tracking-[-0.03em]">{invoice.vendor_name}</h1>
               <StatusDropdown
                 status={invoice.payment_status === 'overdue' ? 'unpaid' : invoice.payment_status}
                 onChangeStatus={handleStatusChange}

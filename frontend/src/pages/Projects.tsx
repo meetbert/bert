@@ -42,9 +42,9 @@ const Projects = () => {
   const invoices = useMemo(() => isDemoMode ? [...demoInvoices.map(d => ({ id: d.id, total: d.total ?? 0, currency: d.currency, project_id: d.project_id })), ...rawInvoices] : rawInvoices, [isDemoMode, demoInvoices, rawInvoices]);
 
 
-  const filteredProjects = filterTab === 'all' ? projects : projects.filter((p) => p.status === filterTab);
-  const activeProjects = filteredProjects.filter((p) => p.status === 'Active');
-  const completedProjects = filteredProjects.filter((p) => p.status === 'Completed');
+  const filteredProjects = (filterTab === 'all' ? projects : projects.filter((p) => p.status === filterTab))
+    .slice()
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const renderProjectCard = (p: Project) => {
     const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);
@@ -92,7 +92,7 @@ const Projects = () => {
     <div className="min-h-screen">
       <div data-tour="projects-list" className="container space-y-6 py-8">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Projects</h1>
+          <h1 className="text-2xl font-bold tracking-[-0.03em]">Projects</h1>
         </div>
 
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -141,24 +141,9 @@ const Projects = () => {
         ) : filteredProjects.length === 0 ? (
           <EmptyState icon={FolderOpen} title="No projects yet" description="Create your first project above to start tracking budgets." />
         ) : (
-          <>
-            {/* Active projects */}
-            {filterTab !== 'Completed' && activeProjects.length > 0 && (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {activeProjects.map(renderProjectCard)}
-              </div>
-            )}
-
-            {/* Completed section */}
-            {completedProjects.length > 0 && (
-              <div>
-                {filterTab === 'all' && <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-muted-foreground">Completed</h2>}
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {completedProjects.map(renderProjectCard)}
-                </div>
-              </div>
-            )}
-          </>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredProjects.map(renderProjectCard)}
+          </div>
         )}
 
       </div>

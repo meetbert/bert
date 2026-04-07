@@ -58,15 +58,15 @@ export const Sidebar = () => {
   return (
     <>
       <aside
-        className={`fixed top-0 left-0 h-screen bg-white border-r border-border flex flex-col transition-all duration-300 z-40 ${collapsed ? 'w-16' : 'w-[220px]'}`}
+        className={`fixed top-0 left-0 h-screen bg-background border-r border-border flex flex-col transition-all duration-300 z-40 ${collapsed ? 'w-16' : 'w-[220px]'}`}
       >
         {/* Header */}
         <div className="p-3 border-b border-border shrink-0">
           <div className={`flex items-center rounded-md px-3 py-2 ${collapsed ? 'justify-center' : ''}`}>
             {isDemoMode ? (
-              <button onClick={() => { stopDemo(); navigate('/'); }} className="font-extrabold text-primary text-xl hover:opacity-70 transition-opacity">Bert.</button>
+              <button onClick={() => { stopDemo(); navigate('/'); }} className="font-extrabold text-primary text-xl tracking-[-0.04em] hover:opacity-70 transition-opacity">Bert.</button>
             ) : (
-              <span className="font-extrabold text-primary text-xl">Bert.</span>
+              <span className="font-extrabold text-primary text-xl tracking-[-0.04em]">Bert.</span>
             )}
           </div>
         </div>
@@ -116,7 +116,7 @@ export const Sidebar = () => {
                 )}
               </button>
             </PopoverTrigger>
-            <PopoverContent side="top" align="start" className="p-1" style={{ width: 'var(--radix-popper-anchor-width)' }}>
+            <PopoverContent side={collapsed ? 'right' : 'top'} align={collapsed ? 'end' : 'start'} className="p-1" style={collapsed ? { width: '12rem' } : { width: 'var(--radix-popper-anchor-width)' }}>
               <button
                 onClick={() => navigate('/settings')}
                 className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors"
@@ -139,12 +139,12 @@ export const Sidebar = () => {
       {/* Collapse toggle */}
       <button
         onClick={toggle}
-        className="fixed top-1/2 -translate-y-1/2 w-8 h-8 bg-white border-2 border-gray-300 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-50"
+        className="fixed top-1/2 -translate-y-1/2 w-8 h-8 bg-card border-2 border-border rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-50"
         style={{ left: collapsed ? '48px' : `${EXPANDED_WIDTH - 16}px` }}
       >
         {collapsed
-          ? <ChevronRight size={16} className="text-gray-600" />
-          : <ChevronLeft size={16} className="text-gray-600" />
+          ? <ChevronRight size={16} className="text-muted-foreground" />
+          : <ChevronLeft size={16} className="text-muted-foreground" />
         }
       </button>
     </>

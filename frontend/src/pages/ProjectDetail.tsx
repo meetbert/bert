@@ -185,7 +185,7 @@ const ProjectDetail = () => {
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold truncate max-w-md lg:max-w-xl">{project.name}</h1>
+            <h1 className="text-2xl font-bold tracking-[-0.03em] truncate max-w-md lg:max-w-xl">{project.name}</h1>
             <ProjectStatusDropdown status={project.status ?? 'Active'} onChangeStatus={async (s) => {
               if (isDemoMode && id?.startsWith('demo-')) {
                 updateDemoProject(id!, { status: s });
@@ -281,7 +281,7 @@ const ProjectDetail = () => {
         </div>
 
         {/* Invoice table */}
-        <div className="overflow-auto rounded-lg border">
+        <div className="overflow-auto rounded-lg border bg-card">
           <table className="w-full text-sm">
             <thead><tr className="border-b bg-secondary/30 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
               <th className="p-3">Vendor</th><th className="p-3">Date</th><th className="p-3">Due Date</th><th className="p-3">Invoice #</th>

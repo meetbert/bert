@@ -125,7 +125,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen">
       <div className="container space-y-8 py-8">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <h1 className="text-2xl font-bold tracking-[-0.03em]">Dashboard</h1>
 
         {/* KPI Row */}
         <div data-tour="kpi-row" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -184,7 +184,7 @@ const Dashboard = () => {
             {filteredInvoices.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">No invoices in this category.</p>
             ) : (
-              <div className="overflow-auto rounded-lg border">
+              <div className="overflow-auto rounded-lg border bg-card">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b bg-secondary/30 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     <th className="p-3">Vendor</th><th className="p-3">Due Date</th><th className="p-3">Total</th><th className="p-3">Status</th>

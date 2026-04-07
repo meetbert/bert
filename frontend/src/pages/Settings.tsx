@@ -71,7 +71,7 @@ const Settings = () => {
   return (
     <div className="min-h-screen">
       <div className="container max-w-2xl space-y-6 py-8">
-        <h1 className="text-2xl font-bold">Settings</h1>
+        <h1 className="text-2xl font-bold tracking-[-0.03em]">Settings</h1>
 
         {/* ── Invoice Inbox ─────────────────────────────────────────── */}
         <Card>

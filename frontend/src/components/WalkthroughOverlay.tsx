@@ -58,19 +58,7 @@ export const WalkthroughOverlay = () => {
   useEffect(() => {
     if (!isActive || !step) return;
 
-    rectRef.current = null;
-
-    // Initial scroll: position element so tooltip + element are both visible
-    const timer = setTimeout(() => {
-      const el = document.querySelector(`[data-tour="${step.target}"]`);
-      if (el) {
-        const r = el.getBoundingClientRect();
-        const absoluteTop = r.top + window.scrollY;
-        // Place element at ~60% down the viewport, leaving room for tooltip above
-        const targetY = absoluteTop - window.innerHeight * 0.45;
-        window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
-      }
-    }, 400);
+    // Keep previous rect visible until new element is found (prevents jump)
 
     // RAF loop for continuous tracking
     let rafId: number;
@@ -84,16 +72,34 @@ export const WalkthroughOverlay = () => {
       rafId = requestAnimationFrame(track);
     };
 
-    // Start tracking after scroll settles
-    const startRaf = setTimeout(() => {
-      // Trigger one React render to show the overlay elements
+    // Try to find and show the element immediately, retry briefly if route is changing
+    const tryShow = () => {
       const el = document.querySelector(`[data-tour="${step.target}"]`);
       if (el) {
-        rectRef.current = el.getBoundingClientRect();
+        const r = el.getBoundingClientRect();
+        const absoluteTop = r.top + window.scrollY;
+        const targetY = absoluteTop - window.innerHeight * 0.45;
+        window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+        rectRef.current = r;
+        forceUpdate(c => c + 1);
+        rafId = requestAnimationFrame(track);
+        return true;
       }
-      forceUpdate(c => c + 1);
-      rafId = requestAnimationFrame(track);
-    }, 800);
+      return false;
+    };
+
+    // If element exists now, show immediately; otherwise poll briefly for route transitions
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let startRaf: ReturnType<typeof setTimeout> | undefined;
+    if (!tryShow()) {
+      let attempts = 0;
+      const poll = () => {
+        attempts++;
+        if (tryShow() || attempts > 10) return;
+        timer = setTimeout(poll, 50);
+      };
+      startRaf = setTimeout(poll, 50);
+    }
 
     return () => {
       clearTimeout(timer);

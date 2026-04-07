@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import { Copy, LogOut, Mail, Sparkles, Trash2 } from 'lucide-react';
-import { SUPPORTED_CURRENCIES, currencySymbol } from '@/lib/currency';
+import { SUPPORTED_CURRENCIES } from '@/lib/currency';
 import { useWalkthrough } from '@/contexts/WalkthroughContext';
 import { useDemoData } from '@/contexts/DemoDataContext';
 import {
@@ -114,7 +114,7 @@ const Settings = () => {
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {SUPPORTED_CURRENCIES.map((c) => (
-                  <SelectItem key={c} value={c}>{currencySymbol(c).trim()} {c}</SelectItem>
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

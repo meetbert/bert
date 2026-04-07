@@ -8,47 +8,56 @@ const daysFromNow = (days: number) => {
   return d.toISOString().split('T')[0];
 };
 
-// Stable IDs
-const P1 = 'demo-proj-atlantic';
-const P2 = 'demo-proj-wildcoast';
-const P3 = 'demo-proj-desert';
-const C_CAMERA = 'demo-cat-camera';
-const C_LIGHTING = 'demo-cat-lighting';
-const C_CATERING = 'demo-cat-catering';
-const C_AERIAL = 'demo-cat-aerial';
-const C_POST = 'demo-cat-post';
-const C_EDITING = 'demo-cat-editing';
-const C_AUDIO = 'demo-cat-audio';
-const C_LOCATIONS = 'demo-cat-locations';
-const C_LOGISTICS = 'demo-cat-logistics';
+// Stable IDs — Projects
+const P_SHADOWS = 'demo-proj-shadows';
+const P_ARCTIC  = 'demo-proj-arctic';
+const P_OCEAN   = 'demo-proj-ocean';
+
+// Stable IDs — Categories
+const C_ACCOMMODATION    = 'demo-cat-accommodation';
+const C_CONTRIBUTOR_FEES = 'demo-cat-contributor-fees';
+const C_CREW_FREELANCE   = 'demo-cat-crew-freelance';
+const C_EQUIPMENT        = 'demo-cat-equipment';
+const C_INSURANCE        = 'demo-cat-insurance';
+const C_LOCATION_RENTAL  = 'demo-cat-location-rental';
+const C_MUSIC_LICENSING  = 'demo-cat-music-licensing';
+const C_OFFICE_SUPPLIES  = 'demo-cat-office-supplies';
+const C_OFFICE_ADMIN     = 'demo-cat-office-admin';
+const C_OTHER            = 'demo-cat-other';
+const C_POST_PRODUCTION  = 'demo-cat-post-production';
+const C_TRAVEL           = 'demo-cat-travel';
 
 const DEMO_PROJECTS: Project[] = [
-  { id: P1, name: 'Atlantic Documentary', budget: 120000, status: 'Active', description: 'Feature-length ocean documentary', ai_context: null, known_vendors: [], known_locations: [], created_at: daysFromNow(-60) },
-  { id: P2, name: 'Wild Coast Series', budget: 90000, status: 'Active', description: '6-part coastal wildlife series', ai_context: null, known_vendors: [], known_locations: [], created_at: daysFromNow(-45) },
-  { id: P3, name: 'Desert Expedition', budget: 50000, status: 'Active', description: 'Sahara crossing documentary', ai_context: null, known_vendors: [], known_locations: [], created_at: daysFromNow(-30) },
+  { id: P_SHADOWS, name: 'Shadows of the Atlantic', budget: 49000, budget_mode: 'total', status: 'Active', description: 'A feature-length documentary exploring historic transatlantic voyages...', ai_context: null, known_vendors: [], known_locations: [], created_at: daysFromNow(-31) },
+  { id: P_ARCTIC, name: 'Arctic Light Documentary', budget: 30000, budget_mode: 'total', status: 'Completed', description: 'A feature-length observational documentary following climate scientists...', ai_context: null, known_vendors: [], known_locations: [], created_at: daysFromNow(-31) },
+  { id: P_OCEAN, name: 'Wild Ocean Series', budget: 56000, budget_mode: 'category', status: 'Active', description: 'A three-part blue-chip documentary series examining threatened ecosystems...', ai_context: null, known_vendors: [], known_locations: [], created_at: daysFromNow(-31) },
 ];
 
 const DEMO_CATEGORIES: Category[] = [
-  { id: C_CAMERA, name: 'Camera' },
-  { id: C_LIGHTING, name: 'Lighting' },
-  { id: C_CATERING, name: 'Catering' },
-  { id: C_AERIAL, name: 'Aerial' },
-  { id: C_POST, name: 'Post Production' },
-  { id: C_EDITING, name: 'Editing' },
-  { id: C_AUDIO, name: 'Audio' },
-  { id: C_LOCATIONS, name: 'Locations' },
-  { id: C_LOGISTICS, name: 'Logistics' },
+  { id: C_ACCOMMODATION, name: 'Accommodation' },
+  { id: C_CONTRIBUTOR_FEES, name: 'Contributor Fees' },
+  { id: C_CREW_FREELANCE, name: 'Crew/Freelance' },
+  { id: C_EQUIPMENT, name: 'Equipment' },
+  { id: C_INSURANCE, name: 'Insurance' },
+  { id: C_LOCATION_RENTAL, name: 'Location Rental' },
+  { id: C_MUSIC_LICENSING, name: 'Music/Licensing' },
+  { id: C_OFFICE_SUPPLIES, name: 'Office Supplies' },
+  { id: C_OFFICE_ADMIN, name: 'Office/Admin' },
+  { id: C_OTHER, name: 'Other' },
+  { id: C_POST_PRODUCTION, name: 'Post-Production' },
+  { id: C_TRAVEL, name: 'Travel' },
 ];
 
 const makeInvoice = (
   id: string,
   vendor: string,
-  categoryId: string,
+  categoryId: string | null,
   projectId: string,
   total: number,
   status: 'paid' | 'unpaid' | 'overdue',
   dueDateOffset?: number,
   invoiceDateOffset: number = -30,
+  currency: string = 'GBP',
 ): Invoice => {
   const paymentStatus = status === 'overdue' ? 'overdue' : status;
   const dueDate = dueDateOffset != null ? daysFromNow(dueDateOffset) : (status === 'paid' ? daysFromNow(-20) : daysFromNow(14));
@@ -56,8 +65,8 @@ const makeInvoice = (
     id,
     vendor_name: vendor,
     invoice_date: daysFromNow(invoiceDateOffset),
-    invoice_number: `INV-${id.slice(-4).toUpperCase()}`,
-    currency: 'EUR',
+    invoice_number: id,
+    currency,
     subtotal: Math.round(total * 0.8),
     vat: Math.round(total * 0.2),
     total,
@@ -76,39 +85,66 @@ const makeInvoice = (
     created_at: daysFromNow(invoiceDateOffset),
     updated_at: null,
     project: DEMO_PROJECTS.find(p => p.id === projectId),
-    category: DEMO_CATEGORIES.find(c => c.id === categoryId),
+    category: categoryId ? DEMO_CATEGORIES.find(c => c.id === categoryId) : undefined,
   };
 };
 
 const DEMO_INVOICES: Invoice[] = [
-  // Atlantic Documentary
-  makeInvoice('demo-inv-001', 'Atlantic Camera Hire', C_CAMERA, P1, 8500, 'unpaid', 7, -25),
-  makeInvoice('demo-inv-002', 'Pinewood Lighting & Grip', C_LIGHTING, P1, 6200, 'paid', undefined, -40),
-  makeInvoice('demo-inv-003', 'Lisbon Catering Co', C_CATERING, P1, 2100, 'overdue', -14, -35),
-  makeInvoice('demo-inv-004', 'Northern Drone Services', C_AERIAL, P1, 3800, 'unpaid', 3, -20),
-  // Wild Coast Series
-  makeInvoice('demo-inv-005', 'Studio X Post Production', C_POST, P2, 28000, 'unpaid', 10, -50),
-  makeInvoice('demo-inv-006', 'Atlantic Camera Hire', C_CAMERA, P2, 16500, 'paid', undefined, -55),
-  makeInvoice('demo-inv-007', 'Southbank Edit Suite', C_EDITING, P2, 14000, 'unpaid', 12, -45),
-  makeInvoice('demo-inv-008', 'London Sound Design', C_AUDIO, P2, 8200, 'paid', undefined, -60),
-  // Desert Expedition (over budget: total = 53,700 > 50,000)
-  makeInvoice('demo-inv-009', 'Sahara Locations', C_LOCATIONS, P3, 22000, 'paid', undefined, -28),
-  makeInvoice('demo-inv-010', 'Atlas Transport', C_LOGISTICS, P3, 18500, 'unpaid', 5, -22),
-  makeInvoice('demo-inv-011', 'Drone Cinematics Ltd', C_AERIAL, P3, 13200, 'unpaid', 8, -18),
+  // ── Shadows of the Atlantic ───────────────────────────────────────
+  makeInvoice('demo-inv-ATL-001', 'Atlantic Camera Hire Ltd',    C_EQUIPMENT,        P_SHADOWS, 3840,   'paid',   0,    -61),
+  makeInvoice('demo-inv-ATL-002', 'Pinewood Lighting & Grip',    C_EQUIPMENT,        P_SHADOWS, 2664,   'unpaid', -59,  -90),
+  makeInvoice('demo-inv-ATL-003', 'Northern Drone Services',     C_CREW_FREELANCE,   P_SHADOWS, 1968,   'paid',   -61,  -92),
+  makeInvoice('demo-inv-ATL-006', 'Location Facilities Ltd',     C_CONTRIBUTOR_FEES, P_SHADOWS, 2880,   'paid',   -6,   -56),
+  makeInvoice('demo-inv-ATL-007', 'Transport Crew Vans',         C_CREW_FREELANCE,   P_SHADOWS, 780,    'paid',   -51,  -92),
+  makeInvoice('demo-inv-ATL-008', 'Studio X Post Production',    C_CONTRIBUTOR_FEES, P_SHADOWS, 4392,   'paid',   -8,   -51),
+  makeInvoice('demo-inv-ATL-009', 'Production Insurance Ltd',    C_INSURANCE,        P_SHADOWS, 2220,   'paid',   -63,  -95),
+  makeInvoice('demo-inv-ACH-0142', 'Atlantic Camera Hire Ltd',   C_EQUIPMENT,        P_SHADOWS, 2646,   'paid',   -38,  -51),
+  makeInvoice('demo-inv-SX-4472', 'Studio X Post Production',    C_POST_PRODUCTION,  P_SHADOWS, 4188,   'unpaid', -33,  -46),
+  makeInvoice('demo-inv-WOS-003', 'Pinewood Lighting & Grip',    C_EQUIPMENT,        P_SHADOWS, 2688,   'unpaid', -1,   -62),
+
+  // ── Arctic Light Documentary ──────────────────────────────────────
+  makeInvoice('demo-inv-ARC-001', 'Atlantic Camera Hire Ltd',    C_EQUIPMENT,        P_ARCTIC,  5700,   'paid',   -143, -175),
+  makeInvoice('demo-inv-ARC-002', 'Northern Drone Services',     C_CREW_FREELANCE,   P_ARCTIC,  2880,   'unpaid', -153, -174),
+  makeInvoice('demo-inv-ARC-003', 'Pinewood Lighting & Grip',    C_EQUIPMENT,        P_ARCTIC,  2256,   'paid',   -152, -183),
+  makeInvoice('demo-inv-ARC-004', 'Catering Co London',          C_CREW_FREELANCE,   P_ARCTIC,  1440,   'unpaid', -151, -182),
+  makeInvoice('demo-inv-ARC-005', 'Studio X Post Production',    null,               P_ARCTIC,  6600,   'paid',   -92,  -127),
+  makeInvoice('demo-inv-ARC-006', 'Location Facilities Ltd',     C_CONTRIBUTOR_FEES, P_ARCTIC,  3720,   'unpaid', -152, -179),
+  makeInvoice('demo-inv-ARC-007', 'Sound Equipment Rentals',     C_EQUIPMENT,        P_ARCTIC,  864,    'unpaid', -61,  -92),
+  makeInvoice('demo-inv-ARC-008', 'Transport Crew Vans',         C_CREW_FREELANCE,   P_ARCTIC,  1730.4, 'paid',   -152, -183),
+  makeInvoice('demo-inv-ARC-009', 'Production Insurance Ltd',    C_OTHER,            P_ARCTIC,  2640,   'paid',   -157, -188),
+  makeInvoice('demo-inv-ARC-010', 'FCO - Freelance Camera Operator', C_CREW_FREELANCE, P_ARCTIC, 2160, 'paid',   -56,  -87),
+
+  // ── Wild Ocean Series ─────────────────────────────────────────────
+  makeInvoice('demo-inv-WOS-001', 'Atlantic Camera Hire Ltd',    null,               P_OCEAN,   6552,   'paid',   -2,   -63),
+  makeInvoice('demo-inv-WOS-002', 'Northern Drone Services',     C_CREW_FREELANCE,   P_OCEAN,   2160,   'paid',   0,    -61),
+  makeInvoice('demo-inv-WOS-004', 'Catering Co London',          C_CONTRIBUTOR_FEES, P_OCEAN,   1180.8, 'unpaid', 5,    -31),
+  makeInvoice('demo-inv-WOS-006', 'Location Facilities Ltd',     null,               P_OCEAN,   2400,   'unpaid', -5,   -64),
+  makeInvoice('demo-inv-WOS-007', 'Sound Equipment Rentals',     C_EQUIPMENT,        P_OCEAN,   648,    'unpaid', -37,  -108),
+  makeInvoice('demo-inv-WOS-008', 'Transport Crew Vans',         C_CREW_FREELANCE,   P_OCEAN,   1584,   'paid',   -38,  -67),
+  makeInvoice('demo-inv-WOS-009', 'Production Insurance Ltd',    C_INSURANCE,        P_OCEAN,   3360,   'unpaid', -7,   -69),
+  makeInvoice('demo-inv-WOS-010', 'Freelance Camera Operator',   C_EQUIPMENT,        P_OCEAN,   3840,   'paid',   -4,   -63),
+  makeInvoice('demo-inv-JM-001',  'John McGee',                  C_INSURANCE,        P_OCEAN,   1000,   'paid',   23,   -27,  'EUR'),
 ];
 
 const DEMO_PROJECT_CATEGORIES = [
-  { id: 'demo-pc-1', project_id: P1, category_id: C_CAMERA, budget: 30000, created_at: '' },
-  { id: 'demo-pc-2', project_id: P1, category_id: C_LIGHTING, budget: 20000, created_at: '' },
-  { id: 'demo-pc-3', project_id: P1, category_id: C_CATERING, budget: 10000, created_at: '' },
-  { id: 'demo-pc-4', project_id: P1, category_id: C_AERIAL, budget: 15000, created_at: '' },
-  { id: 'demo-pc-5', project_id: P2, category_id: C_POST, budget: 30000, created_at: '' },
-  { id: 'demo-pc-6', project_id: P2, category_id: C_CAMERA, budget: 20000, created_at: '' },
-  { id: 'demo-pc-7', project_id: P2, category_id: C_EDITING, budget: 20000, created_at: '' },
-  { id: 'demo-pc-8', project_id: P2, category_id: C_AUDIO, budget: 10000, created_at: '' },
-  { id: 'demo-pc-9', project_id: P3, category_id: C_LOCATIONS, budget: 25000, created_at: '' },
-  { id: 'demo-pc-10', project_id: P3, category_id: C_LOGISTICS, budget: 15000, created_at: '' },
-  { id: 'demo-pc-11', project_id: P3, category_id: C_AERIAL, budget: 10000, created_at: '' },
+  // Wild Ocean Series — category budget mode
+  { id: 'demo-pc-1',  project_id: P_OCEAN,   category_id: C_EQUIPMENT,        budget: 20000, created_at: '' },
+  { id: 'demo-pc-2',  project_id: P_OCEAN,   category_id: C_POST_PRODUCTION,  budget: 16000, created_at: '' },
+  { id: 'demo-pc-3',  project_id: P_OCEAN,   category_id: C_CREW_FREELANCE,   budget: 10000, created_at: '' },
+  { id: 'demo-pc-4',  project_id: P_OCEAN,   category_id: C_MUSIC_LICENSING,  budget: 7000,  created_at: '' },
+  { id: 'demo-pc-5',  project_id: P_OCEAN,   category_id: C_CONTRIBUTOR_FEES, budget: 3000,  created_at: '' },
+  // Shadows of the Atlantic — total budget mode (category budgets still tracked)
+  { id: 'demo-pc-6',  project_id: P_SHADOWS, category_id: C_OFFICE_SUPPLIES,  budget: 0,     created_at: '' },
+  { id: 'demo-pc-7',  project_id: P_SHADOWS, category_id: C_OFFICE_ADMIN,     budget: 0,     created_at: '' },
+  { id: 'demo-pc-8',  project_id: P_SHADOWS, category_id: C_POST_PRODUCTION,  budget: 15000, created_at: '' },
+  { id: 'demo-pc-9',  project_id: P_SHADOWS, category_id: C_INSURANCE,        budget: 5000,  created_at: '' },
+  { id: 'demo-pc-10', project_id: P_SHADOWS, category_id: C_CREW_FREELANCE,   budget: 3000,  created_at: '' },
+  { id: 'demo-pc-11', project_id: P_SHADOWS, category_id: C_LOCATION_RENTAL,  budget: 0,     created_at: '' },
+  { id: 'demo-pc-12', project_id: P_SHADOWS, category_id: C_EQUIPMENT,        budget: 16000, created_at: '' },
+  { id: 'demo-pc-13', project_id: P_SHADOWS, category_id: C_MUSIC_LICENSING,  budget: 0,     created_at: '' },
+  { id: 'demo-pc-14', project_id: P_SHADOWS, category_id: C_ACCOMMODATION,    budget: 0,     created_at: '' },
+  { id: 'demo-pc-15', project_id: P_SHADOWS, category_id: C_TRAVEL,           budget: 0,     created_at: '' },
+  { id: 'demo-pc-16', project_id: P_SHADOWS, category_id: C_OTHER,            budget: 0,     created_at: '' },
 ];
 
 type ProjectCategory = typeof DEMO_PROJECT_CATEGORIES[number];

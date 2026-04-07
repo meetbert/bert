@@ -17,6 +17,7 @@ const navItems = [
 
 export const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === 'true');
+  const [popoverOpen, setPopoverOpen] = useState(false);
   const { user, signOut } = useAuth();
   const { isDemoMode, stopDemo } = useDemoData();
   const location = useLocation();
@@ -96,7 +97,7 @@ export const Sidebar = () => {
 
         {/* Footer */}
         <div className="mt-auto border-t border-border shrink-0">
-          <Popover>
+          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
               <button
                 className={`flex items-center w-full p-4 gap-3 hover:bg-muted transition-colors ${collapsed ? 'justify-center' : ''}`}
@@ -114,14 +115,14 @@ export const Sidebar = () => {
             </PopoverTrigger>
             <PopoverContent side={collapsed ? 'right' : 'top'} align={collapsed ? 'end' : 'start'} className="p-1" style={collapsed ? { width: '12rem' } : { width: 'var(--radix-popper-anchor-width)' }}>
               <button
-                onClick={() => navigate('/settings')}
+                onClick={() => { setPopoverOpen(false); navigate('/settings'); }}
                 className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors"
               >
                 <Settings className="h-4 w-4" />
                 Settings
               </button>
               <button
-                onClick={handleSignOut}
+                onClick={() => { setPopoverOpen(false); handleSignOut(); }}
                 className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
               >
                 <LogOut className="h-4 w-4" />

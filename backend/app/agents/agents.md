@@ -4,6 +4,15 @@
 
 ---
 
+## Conventions
+
+- **Tool factory pattern:** Tools are never passed `user_id` as a parameter. Instead, `create_get_tools(user_id)` and `create_action_tools(user_id)` capture `user_id` in a closure. Every tool uses it internally for DB queries — the LLM never sees it.
+- **Prompt files:** One file per agent in `prompts/`, named `<agent>_prompt.py`. Each exports a single string constant.
+- **Agent entry points:** Each subagent exposes a single `run_<agent>()` async function. Orchestrators call this and nothing else.
+- **Config:** LLM model and Supabase client are defined in `config.py`. Import from there — don't re-instantiate.
+
+---
+
 ## 1. Email Infrastructure
 
 **Key rule:** The agent ALWAYS sends outbound emails from `clientname@meetbert.uk` (AgentMail). It never sends from the user's personal/work account.
@@ -308,7 +317,9 @@ app/
 │
 ├── routes/
 │   ├── agentmail.py                 # POST /webhook/agentmail (inbound email trigger)
-│   └── chat.py                      # POST /api/chat (text + optional file, single endpoint)
+│   ├── chat.py                      # POST /api/chat (text + optional file, single endpoint)
+│   ├── extract.py                   # POST /extract (invoice extraction + vendor mapping lookup)
+│   └── projects.py                  # POST /projects/extract-context (project doc extraction)
 │
 └── agents/
     ├── config.py                    # Supabase client, AgentMail keys, LLM factory
@@ -338,19 +349,11 @@ app/
     │
     └── tests/
         ├── conftest.py
-        ├── test_get_tools.py
-        ├── test_action_tools.py
-        ├── test_classifier.py
-        ├── test_invoice_agent.py
-        ├── test_project_agent.py
-        ├── test_question_agent.py
-        ├── test_email_reply_agent.py
-        ├── test_chat_reply_agent.py
+        ├── tests.md                 # test principles, structure, coverage
         ├── sample_invoices/
-        │   └── sample_invoice_{1-5}.pdf
-        └── e2e/
-            ├── conftest.py          # fixtures: test_user_id, tag, sweep_orphans, invoice_ids, project_ids
-            └── test_pipeline.py     # 16 e2e tests
+        ├── unit/                    # fast, no LLM/DB
+        ├── integration/             # real LLM + DB, one component per file
+        └── e2e/                     # full pipeline, LLM judge assertions
 ```
 
 Separation: `app/routes/` = thin HTTP handlers, `app/agents/` = all business logic. Routes delegate to channel orchestrators (`bert_email`, `bert_chat`), which call the shared `pipeline` and their respective reply agent.
@@ -365,16 +368,11 @@ See `app/agents/tests/tests.md` for test principles, structure, and coverage.
 
 ## 7. Deployment
 
-Both frontend and backend are deployed on **Railway**.
-
-### Frontend & Backend: Railway
-
-Built with `npm run build` (nixpacks), served as a static site via `npx serve -s frontend/dist`.
-Python process started via `Procfile`: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+Both frontend and backend are deployed on **Railway**. To deploy: push to `main`, then manually trigger a deploy from the Railway dashboard.
 
 ---
 
-## 7. To-Dos
+## 8. To-Dos
 
 - **Multi-thread replies:** Reply agent currently sends one reply on the triggering thread. Upgrade to send follow-ups on the correct per-invoice thread (e.g., ask the vendor directly on their thread instead of asking the coworker who forwarded it). Requires `get_invoice_threads` tool and updating the reply prompt to support multiple `send_reply` calls across different threads.
 - **Connected Email OAuth (Path B):** User connects Gmail/Outlook via Nylas (read-only). Nylas scans inbox for invoice-like emails, feeds them into the same pipeline. All outbound still sent from `clientname@meetbert.uk`.

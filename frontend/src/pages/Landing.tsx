@@ -69,11 +69,11 @@ const Landing = () => {
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}>
                 Try the demo <ArrowRight size={14} />
               </button>
-              <Link to="/login?signup=true" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: T.red, color: '#fff', fontSize: '14px', fontWeight: 500, padding: '13px 26px', borderRadius: '8px', border: 'none', textDecoration: 'none', transition: 'opacity 140ms ease, transform 140ms ease' }}
+              <a href="https://calendly.com/meetbert-info/30min" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: T.red, color: '#fff', fontSize: '14px', fontWeight: 500, padding: '13px 26px', borderRadius: '8px', border: 'none', textDecoration: 'none', transition: 'opacity 140ms ease, transform 140ms ease' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '0.85'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}>
-                Sign up
-              </Link>
+                Book a demo
+              </a>
             </div>
           </div>
         </section>
@@ -286,11 +286,11 @@ const Landing = () => {
               <p style={{ fontSize: '14px', color: T.muted, margin: '14px 0 0', lineHeight: 1.6 }}>No sign-up needed. Explore with real production data.</p>
             </div>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <Link to="/login?signup=true" style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: T.red, color: '#fff', fontSize: '14px', fontWeight: 500, padding: '12px 22px', borderRadius: '8px', border: 'none', textDecoration: 'none', transition: 'opacity 140ms ease, transform 140ms ease' }}
+              <a href="https://calendly.com/meetbert-info/30min" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: T.red, color: '#fff', fontSize: '14px', fontWeight: 500, padding: '12px 22px', borderRadius: '8px', border: 'none', textDecoration: 'none', transition: 'opacity 140ms ease, transform 140ms ease' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '0.85'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}>
-                Sign up
-              </Link>
+                Book a demo
+              </a>
               <button onClick={handleTryDemo} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: T.dark, color: '#fff', fontSize: '14px', fontWeight: 500, padding: '12px 22px', borderRadius: '8px', border: 'none', cursor: 'pointer', boxShadow: `0 1px 3px rgba(0,0,0,0.12), 0 6px 20px rgba(0,0,0,0.08)`, transition: 'opacity 140ms ease, transform 140ms ease' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '0.82'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}>

@@ -235,7 +235,7 @@ const Invoices = () => {
               <button
                 key={key}
                 onClick={() => { setQuickFilter(key); setPage(0); }}
-                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${quickFilter === key ? 'bg-secondary text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${quickFilter === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >{label}</button>
             ))}
           </div>
@@ -244,7 +244,7 @@ const Invoices = () => {
               <button
                 key={key}
                 onClick={() => { setFilterProjectScope(key); setPage(0); }}
-                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${filterProjectScope === key ? 'bg-secondary text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${filterProjectScope === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >{label}</button>
             ))}
           </div>
@@ -252,10 +252,10 @@ const Invoices = () => {
             <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
               <Plus className="h-4 w-4" /> New Invoice
             </button>
-            <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1 rounded-md border bg-card px-3 py-1 text-sm font-medium transition-colors hover:bg-secondary">
+            <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
               <Upload className="h-4 w-4" /> Import
             </button>
-            <button onClick={exportCsv} className="inline-flex items-center gap-1 rounded-md border bg-card px-3 py-1 text-sm font-medium transition-colors hover:bg-secondary">
+            <button onClick={exportCsv} className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
               <Download className="h-4 w-4" /> Export
             </button>
           </div>

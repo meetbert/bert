@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDemoData } from '@/contexts/DemoDataContext';
+import { useWalkthrough } from '@/contexts/WalkthroughContext';
 import { LayoutDashboard, FolderOpen, FileText, ChevronLeft, ChevronRight, Settings, LogOut } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
@@ -20,17 +21,17 @@ export const Sidebar = () => {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const { user, signOut } = useAuth();
   const { isDemoMode, stopDemo } = useDemoData();
+  const { isActive: isTourActive } = useWalkthrough();
   const location = useLocation();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    document.documentElement.style.setProperty('--sidebar-width', `${collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH}px`);
-  }, [collapsed]);
+  // Force sidebar open during walkthrough
+  const isCollapsed = isTourActive ? false : collapsed;
 
   useEffect(() => {
-    const initial = localStorage.getItem(SIDEBAR_KEY) === 'true' ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
-    document.documentElement.style.setProperty('--sidebar-width', `${initial}px`);
-  }, []);
+    document.documentElement.style.setProperty('--sidebar-width', `${isCollapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH}px`);
+  }, [isCollapsed]);
+
 
   const toggle = () => {
     setCollapsed(prev => {
@@ -59,11 +60,11 @@ export const Sidebar = () => {
   return (
     <>
       <aside
-        className={`fixed top-0 left-0 h-screen bg-background border-r border-border flex flex-col transition-all duration-300 z-40 ${collapsed ? 'w-16' : 'w-[220px]'}`}
+        className={`fixed top-0 left-0 h-screen bg-card border-r border-border flex flex-col z-40 ${isTourActive ? '' : 'transition-all duration-300'} ${isCollapsed ? 'w-16' : 'w-[220px]'}`}
       >
         {/* Header */}
         <div className="p-3 border-b border-border shrink-0">
-          <div className={`flex items-center rounded-md px-3 py-2 ${collapsed ? 'justify-center' : ''}`}>
+          <div className={`flex items-center rounded-md px-3 py-2 ${isCollapsed ? 'justify-center' : ''}`}>
             <Link to="/" onClick={isDemoMode ? () => stopDemo() : undefined} className="font-extrabold text-primary text-xl tracking-[-0.04em] hover:opacity-70 transition-opacity">Bert.</Link>
           </div>
         </div>
@@ -77,8 +78,9 @@ export const Sidebar = () => {
                 <li key={to}>
                   <Link
                     to={to}
-                    title={collapsed ? label : undefined}
-                    className={`flex items-center rounded-md text-sm transition-colors ${collapsed ? 'px-3 py-2 justify-center' : 'px-3 py-2'} ${
+                    title={isCollapsed ? label : undefined}
+                    {...(active && isTourActive ? { 'data-tour': 'sidebar-active-nav' } : {})}
+                    className={`flex items-center rounded-md text-sm transition-colors ${isCollapsed ? 'px-3 py-2 justify-center' : 'px-3 py-2'} ${
                       active
                         ? 'bg-primary/10 text-primary font-medium'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -87,7 +89,7 @@ export const Sidebar = () => {
                     <div className="w-5 h-5 flex items-center justify-center shrink-0">
                       <Icon size={20} strokeWidth={2} />
                     </div>
-                    {!collapsed && <span className="ml-3">{label}</span>}
+                    {!isCollapsed && <span className="ml-3">{label}</span>}
                   </Link>
                 </li>
               );
@@ -100,12 +102,12 @@ export const Sidebar = () => {
           <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
               <button
-                className={`flex items-center w-full p-4 gap-3 hover:bg-muted transition-colors ${collapsed ? 'justify-center' : ''}`}
+                className={`flex items-center w-full p-4 gap-3 hover:bg-muted transition-colors ${isCollapsed ? 'justify-center' : ''}`}
               >
                 <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold text-primary">
                   {initials}
                 </div>
-                {!collapsed && (
+                {!isCollapsed && (
                   <div className="min-w-0 flex-1 text-left">
                     <p className="text-sm font-medium truncate leading-tight">{displayName}</p>
                     {displayName !== email && <p className="text-xs text-muted-foreground truncate">{email}</p>}
@@ -113,7 +115,7 @@ export const Sidebar = () => {
                 )}
               </button>
             </PopoverTrigger>
-            <PopoverContent side={collapsed ? 'right' : 'top'} align={collapsed ? 'end' : 'start'} className="p-1" style={collapsed ? { width: '12rem' } : { width: 'var(--radix-popper-anchor-width)' }}>
+            <PopoverContent side={isCollapsed ? 'right' : 'top'} align={isCollapsed ? 'end' : 'start'} className="p-1" style={collapsed ? { width: '12rem' } : { width: 'var(--radix-popper-anchor-width)' }}>
               <button
                 onClick={() => { setPopoverOpen(false); navigate('/settings'); }}
                 className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors"
@@ -133,17 +135,19 @@ export const Sidebar = () => {
         </div>
       </aside>
 
-      {/* Collapse toggle */}
-      <button
-        onClick={toggle}
-        className="fixed top-1/2 -translate-y-1/2 w-8 h-8 bg-card border-2 border-border rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-50"
-        style={{ left: collapsed ? '48px' : `${EXPANDED_WIDTH - 16}px` }}
-      >
-        {collapsed
-          ? <ChevronRight size={16} className="text-muted-foreground" />
-          : <ChevronLeft size={16} className="text-muted-foreground" />
-        }
-      </button>
+      {/* Collapse toggle — hidden during walkthrough */}
+      {!isTourActive && (
+        <button
+          onClick={toggle}
+          className="fixed top-1/2 -translate-y-1/2 w-8 h-8 bg-card border-2 border-border rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-50"
+          style={{ left: isCollapsed ? '48px' : `${EXPANDED_WIDTH - 16}px` }}
+        >
+          {isCollapsed
+            ? <ChevronRight size={16} className="text-muted-foreground" />
+            : <ChevronLeft size={16} className="text-muted-foreground" />
+          }
+        </button>
+      )}
     </>
   );
 };

@@ -6,9 +6,13 @@ import { X, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 export const WalkthroughOverlay = () => {
   const { isActive, step, currentStep, totalSteps, next, prev, skip } = useWalkthrough();
   const [, forceUpdate] = useState(0);
+  const [targetFound, setTargetFound] = useState(false);
   const rectRef = useRef<DOMRect | null>(null);
+  const navRectRef = useRef<DOMRect | null>(null);
   const spotlightRef = useRef<HTMLDivElement>(null);
+  const navSpotlightRef = useRef<HTMLDivElement>(null);
   const svgCutoutRef = useRef<SVGRectElement>(null);
+  const navCutoutRef = useRef<SVGRectElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   const handleSkip = useCallback(() => {
@@ -24,14 +28,27 @@ export const WalkthroughOverlay = () => {
   }, [currentStep, totalSteps, next, skip]);
 
   // Directly update DOM elements for zero-lag tracking
-  const applyRect = useCallback((r: DOMRect) => {
+  const applyRect = useCallback((r: DOMRect, navR: DOMRect | null) => {
     const pad = 8;
+    const navPad = 4;
     // Update SVG cutout
     if (svgCutoutRef.current) {
       svgCutoutRef.current.setAttribute('x', String(r.left - pad));
       svgCutoutRef.current.setAttribute('y', String(r.top - pad));
       svgCutoutRef.current.setAttribute('width', String(r.width + pad * 2));
       svgCutoutRef.current.setAttribute('height', String(r.height + pad * 2));
+    }
+    // Update sidebar nav cutout
+    if (navCutoutRef.current) {
+      if (navR) {
+        navCutoutRef.current.setAttribute('x', String(navR.left - navPad));
+        navCutoutRef.current.setAttribute('y', String(navR.top - navPad));
+        navCutoutRef.current.setAttribute('width', String(navR.width + navPad * 2));
+        navCutoutRef.current.setAttribute('height', String(navR.height + navPad * 2));
+      } else {
+        navCutoutRef.current.setAttribute('width', '0');
+        navCutoutRef.current.setAttribute('height', '0');
+      }
     }
     // Update spotlight ring
     if (spotlightRef.current) {
@@ -40,10 +57,24 @@ export const WalkthroughOverlay = () => {
       spotlightRef.current.style.width = `${r.width + pad * 2}px`;
       spotlightRef.current.style.height = `${r.height + pad * 2}px`;
     }
+    // Update sidebar nav spotlight
+    if (navSpotlightRef.current) {
+      if (navR) {
+        navSpotlightRef.current.style.top = `${navR.top - navPad}px`;
+        navSpotlightRef.current.style.left = `${navR.left - navPad}px`;
+        navSpotlightRef.current.style.width = `${navR.width + navPad * 2}px`;
+        navSpotlightRef.current.style.height = `${navR.height + navPad * 2}px`;
+        navSpotlightRef.current.style.display = 'block';
+      } else {
+        navSpotlightRef.current.style.display = 'none';
+      }
+    }
     // Update tooltip position
     if (tooltipRef.current) {
+      const spaceAbove = r.top;
       const spaceBelow = window.innerHeight - r.bottom;
-      if (spaceBelow > 220) {
+      const placeBelow = spaceBelow > 220 || spaceAbove < 240;
+      if (placeBelow) {
         tooltipRef.current.style.top = `${r.bottom + 16}px`;
         tooltipRef.current.style.left = `${Math.max(16, Math.min(r.left, window.innerWidth - 380))}px`;
         tooltipRef.current.style.transform = 'none';
@@ -58,29 +89,46 @@ export const WalkthroughOverlay = () => {
   useEffect(() => {
     if (!isActive || !step) return;
 
-    // Keep previous rect visible until new element is found (prevents jump)
+    // Clear stale rect so the tooltip hides during route transitions
+    rectRef.current = null;
+    setTargetFound(false);
+
+    // Intro step (no UI target) — just show centered tooltip over backdrop
+    if (step.target === 'tour-intro') {
+      setTargetFound(true);
+      forceUpdate(c => c + 1);
+      // Navigate to the intro route so sidebar shows the right tab
+      return;
+    }
 
     // RAF loop for continuous tracking
     let rafId: number;
     const track = () => {
       const el = document.querySelector(`[data-tour="${step.target}"]`);
+      const navEl = document.querySelector('[data-tour="sidebar-active-nav"]');
+      const navR = navEl ? navEl.getBoundingClientRect() : null;
+      navRectRef.current = navR;
       if (el) {
         const r = el.getBoundingClientRect();
         rectRef.current = r;
-        applyRect(r);
+        applyRect(r, navR);
       }
       rafId = requestAnimationFrame(track);
     };
 
-    // Try to find and show the element immediately, retry briefly if route is changing
+    // Try to find and show the element — reject rects that overlap the sidebar (layout not settled)
     const tryShow = () => {
+      const sidebarW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')) || 0;
       const el = document.querySelector(`[data-tour="${step.target}"]`);
       if (el) {
         const r = el.getBoundingClientRect();
+        // If the element's left edge is behind the sidebar, layout hasn't reflowed yet
+        if (sidebarW > 0 && r.left < sidebarW - 20) return false;
         const absoluteTop = r.top + window.scrollY;
         const targetY = absoluteTop - window.innerHeight * 0.45;
         window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
         rectRef.current = r;
+        setTargetFound(true);
         forceUpdate(c => c + 1);
         rafId = requestAnimationFrame(track);
         return true;
@@ -88,36 +136,34 @@ export const WalkthroughOverlay = () => {
       return false;
     };
 
-    // If element exists now, show immediately; otherwise poll briefly for route transitions
+    // Poll until element is found AND layout has settled
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let startRaf: ReturnType<typeof setTimeout> | undefined;
-    if (!tryShow()) {
-      let attempts = 0;
-      const poll = () => {
-        attempts++;
-        if (tryShow() || attempts > 10) return;
-        timer = setTimeout(poll, 50);
-      };
-      startRaf = setTimeout(poll, 50);
-    }
+    let attempts = 0;
+    const poll = () => {
+      attempts++;
+      if (tryShow() || attempts > 20) return;
+      timer = setTimeout(poll, 50);
+    };
+    timer = setTimeout(poll, 30);
 
     return () => {
       clearTimeout(timer);
-      clearTimeout(startRaf);
       cancelAnimationFrame(rafId);
     };
   }, [isActive, step, currentStep, applyRect]);
 
   if (!isActive || !step) return null;
 
-  const rect = rectRef.current;
+  const rect = targetFound ? rectRef.current : null;
   const isLastStep = currentStep === totalSteps - 1;
 
   // Initial tooltip position (will be overridden by RAF)
   const tooltipStyle: React.CSSProperties = {};
   if (rect) {
+    const spaceAbove = rect.top;
     const spaceBelow = window.innerHeight - rect.bottom;
-    if (spaceBelow > 220) {
+    const placeBelow = spaceBelow > 220 || spaceAbove < 240;
+    if (placeBelow) {
       tooltipStyle.top = rect.bottom + 16;
       tooltipStyle.left = Math.max(16, Math.min(rect.left, window.innerWidth - 380));
     } else {
@@ -149,6 +195,12 @@ export const WalkthroughOverlay = () => {
                 fill="black"
               />
             )}
+            <rect
+              ref={navCutoutRef}
+              x={0} y={0} width={0} height={0}
+              rx={8}
+              fill="black"
+            />
           </mask>
         </defs>
         <rect
@@ -172,6 +224,13 @@ export const WalkthroughOverlay = () => {
           }}
         />
       )}
+
+      {/* Sidebar active nav spotlight */}
+      <div
+        ref={navSpotlightRef}
+        className="fixed z-[999] rounded-lg ring-2 ring-primary/60 pointer-events-none"
+        style={{ display: 'none' }}
+      />
 
       {/* Tooltip card */}
       <div

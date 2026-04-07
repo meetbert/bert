@@ -118,7 +118,7 @@ const Projects = () => {
                 key={tab}
                 onClick={() => setFilterTab(tab)}
                 className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-                  filterTab === tab ? 'bg-secondary text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  filterTab === tab ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {tab === 'all' ? 'All' : tab}

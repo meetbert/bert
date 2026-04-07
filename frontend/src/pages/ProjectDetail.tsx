@@ -325,7 +325,7 @@ const ProjectDetail = () => {
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
                     <div
-                      className="h-full rounded-full bg-muted-foreground/40 transition-all"
+                      className="h-full rounded-full bg-primary transition-all"
                       style={{ width: `${cat.pct}%` }}
                     />
                   </div>

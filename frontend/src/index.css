@@ -7,10 +7,10 @@
 @layer base {
   :root {
     --sidebar-width: 256px;
-    --background: 50 11% 97%;
+    --background: 0 0% 100%;
     --foreground: 60 4% 4%;
 
-    --card: 0 0% 100%;
+    --card: 50 11% 97%;
     --card-foreground: 60 4% 4%;
 
     --popover: 0 0% 100%;

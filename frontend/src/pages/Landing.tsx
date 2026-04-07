@@ -249,8 +249,8 @@ const Landing = () => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
               <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: T.offWhite, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: T.muted, flexShrink: 0, border: `1px solid ${T.border}` }}>JM</div>
               <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: '14px', fontWeight: 600 }}>Jamie Morrison</div>
-                <div style={{ fontSize: '13px', color: T.muted }}>Line Producer, Northlight Films</div>
+                <div style={{ fontSize: '14px', fontWeight: 600 }}>Jamie M.</div>
+                <div style={{ fontSize: '13px', color: T.muted }}>Line Producer, NF Films</div>
               </div>
             </div>
           </div>

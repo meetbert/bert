@@ -112,13 +112,13 @@ const Projects = () => {
 
         {/* Filter tabs + Add Project */}
         <div className="flex items-center justify-between">
-          <div className="inline-flex gap-1 rounded-lg bg-secondary p-1">
+          <div className="inline-flex gap-1 rounded-lg border bg-card p-1">
             {(['all', 'Active', 'Completed'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setFilterTab(tab)}
                 className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-                  filterTab === tab ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  filterTab === tab ? 'bg-secondary text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {tab === 'all' ? 'All' : tab}

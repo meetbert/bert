@@ -1,9 +1,5 @@
-import { useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { Link } from 'react-router-dom';
 import { useDemoData } from '@/contexts/DemoDataContext';
-import { supabase } from '@/lib/supabase';
-import { resolvePostAuthRoute } from '@/lib/authRouting';
 import { useWalkthrough } from '@/contexts/WalkthroughContext';
 import { ArrowRight, BarChart3, MessageSquare, FileText, Smartphone, Mail } from 'lucide-react';
 import { LandingHeader } from '@/components/ui/header';
@@ -32,24 +28,8 @@ const SectionLabel = ({ text, onDark = false }: { text: string; onDark?: boolean
 );
 
 const Landing = () => {
-  const { user, loading } = useAuth();
   const { startDemo } = useDemoData();
   const { start: startTour } = useWalkthrough();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (loading || !user) return;
-    supabase
-      .from('user_settings')
-      .select('onboarding_done')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        navigate(resolvePostAuthRoute(user, data), { replace: true });
-      });
-  }, [user, loading, navigate]);
-
-  if (loading) return null;
 
   const handleTryDemo = () => {
     startDemo();

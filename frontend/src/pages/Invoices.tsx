@@ -230,21 +230,21 @@ const Invoices = () => {
 
         {/* Quick filter + Project scope tabs + Import/Export */}
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex gap-1 rounded-lg bg-secondary p-1">
+          <div className="flex gap-1 rounded-lg border bg-card p-1">
             {([['all', 'All'], ['paid', 'Paid'], ['unpaid', 'Unpaid'], ['overdue', 'Overdue']] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => { setQuickFilter(key); setPage(0); }}
-                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${quickFilter === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${quickFilter === key ? 'bg-secondary text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >{label}</button>
             ))}
           </div>
-          <div className="flex gap-1 rounded-lg bg-secondary p-1">
+          <div className="flex gap-1 rounded-lg border bg-card p-1">
             {([['active', 'Active Projects'], ['all', 'All'], ['archived', 'Completed']] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => { setFilterProjectScope(key); setPage(0); }}
-                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${filterProjectScope === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${filterProjectScope === key ? 'bg-secondary text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >{label}</button>
             ))}
           </div>
@@ -252,10 +252,10 @@ const Invoices = () => {
             <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
               <Plus className="h-4 w-4" /> New Invoice
             </button>
-            <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm font-medium transition-colors hover:bg-secondary">
+            <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1 rounded-md border bg-card px-3 py-1 text-sm font-medium transition-colors hover:bg-secondary">
               <Upload className="h-4 w-4" /> Import
             </button>
-            <button onClick={exportCsv} className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm font-medium transition-colors hover:bg-secondary">
+            <button onClick={exportCsv} className="inline-flex items-center gap-1 rounded-md border bg-card px-3 py-1 text-sm font-medium transition-colors hover:bg-secondary">
               <Download className="h-4 w-4" /> Export
             </button>
           </div>
@@ -297,7 +297,7 @@ const Invoices = () => {
         {loading ? (
           <div className="overflow-auto rounded-lg border bg-card">
             <table className="w-full text-sm">
-              <thead><tr className="border-b bg-secondary/30 text-left text-muted-foreground">
+              <thead><tr className="border-b bg-card text-left text-muted-foreground">
                 <th className="p-3">Vendor</th><th className="p-3">Date</th><th className="p-3">Due Date</th><th className="p-3">Invoice #</th>
                 <th className="p-3">Total</th><th className="p-3">Category</th><th className="p-3">Project</th><th className="p-3">Status</th>
               </tr></thead>
@@ -322,7 +322,7 @@ const Invoices = () => {
         ) : (
           <div className="overflow-auto rounded-lg border bg-card">
             <table className="w-full text-sm">
-              <thead><tr className="border-b bg-secondary/30 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <thead><tr className="border-b bg-card text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 <th className="p-3">Vendor</th><th className="p-3">Date</th><th className="p-3">Due Date</th><th className="p-3">Invoice #</th>
                 <th className="p-3">Total</th><th className="p-3">Category</th><th className="p-3">Project</th><th className="p-3">Status</th>
               </tr></thead>

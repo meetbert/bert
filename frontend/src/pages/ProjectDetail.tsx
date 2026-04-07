@@ -2,11 +2,9 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Project, Invoice, Category } from '@/types/database';
-import { KpiCard } from '@/components/KpiCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatusDropdown } from '@/components/StatusDropdown';
 import { ProjectStatusDropdown } from '@/components/ProjectStatusDropdown';
-import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,12 +15,10 @@ import { toast } from '@/hooks/use-toast';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency, convertToBase } from '@/lib/currency';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
-import { FileText, DollarSign, Target, AlertCircle, ArrowLeft, Pencil, Trash2, ExternalLink, ImageIcon } from 'lucide-react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
+import { FileText, AlertCircle, ArrowLeft, Pencil, Trash2, ExternalLink, ImageIcon } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { ProjectEditDialog } from '@/components/ProjectEditDialog';
 import { useDemoData } from '@/contexts/DemoDataContext';
-
-const COLORS = ['hsl(0,100%,65%)', 'hsl(0,0%,20%)', 'hsl(0,0%,45%)', 'hsl(0,0%,70%)', 'hsl(0,0%,85%)', 'hsl(38,92%,50%)'];
 
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +36,7 @@ const ProjectDetail = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const [assignableCategories, setAssignableCategories] = useState<Category[]>([]);
+  const [projectCategories, setProjectCategories] = useState<{ category_id: string; budget: number }[]>([]);
   const [sort, setSort] = useState('newest');
 
   const fetchData = () => {
@@ -56,7 +53,9 @@ const ProjectDetail = () => {
       });
       setInvoices(invs as Invoice[]);
       setCategories(demoCategories);
-      const projCatIds = new Set(demoProjectCategories.filter(pc => pc.project_id === id).map(pc => pc.category_id));
+      const projCats = demoProjectCategories.filter(pc => pc.project_id === id);
+      const projCatIds = new Set(projCats.map(pc => pc.category_id));
+      setProjectCategories(projCats.map(pc => ({ category_id: pc.category_id, budget: pc.budget ?? 0 })));
       setAssignableCategories(projCatIds.size > 0 ? demoCategories.filter(c => projCatIds.has(c.id)) : demoCategories);
       setDocs(demoProjectDocs.filter(d => d.project_id === id).map(d => ({ id: d.id, file_name: d.file_name, storage_path: '', signedUrl: d.signedUrl })));
       setLoading(false);
@@ -68,7 +67,7 @@ const ProjectDetail = () => {
       supabase.from('invoices').select('*, category:invoice_categories(*)').eq('project_id', id),
       supabase.from('invoice_categories').select('*'),
       supabase.from('project_documents').select('id, file_name, storage_path').eq('project_id', id),
-      supabase.from('project_categories').select('category_id').eq('project_id', id),
+      supabase.from('project_categories').select('category_id, budget').eq('project_id', id),
     ]).then(([p, i, c, d, pc]) => {
       setProject(p.data);
       const today = new Date().toISOString().split('T')[0];
@@ -80,7 +79,9 @@ const ProjectDetail = () => {
       setInvoices(enriched);
       const allCats: Category[] = c.data ?? [];
       setCategories(allCats);
-      const projectCatIds = new Set((pc.data ?? []).map((row: any) => row.category_id));
+      const projCats = (pc.data ?? []).map((row: any) => ({ category_id: row.category_id, budget: row.budget ?? 0 }));
+      setProjectCategories(projCats);
+      const projectCatIds = new Set(projCats.map((row: any) => row.category_id));
       setAssignableCategories(
         projectCatIds.size > 0 ? allCats.filter((cat) => projectCatIds.has(cat.id)) : allCats,
       );
@@ -154,10 +155,37 @@ const ProjectDetail = () => {
   const remaining = project.budget - totalSpent;
   const pct = project.budget > 0 ? Math.min((totalSpent / project.budget) * 100, 100) : 0;
 
-  const catSpend = categories.map((c) => ({
-    name: c.name,
-    value: invoices.filter((i) => i.category_id === c.id).reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0),
-  })).filter((c) => c.value > 0);
+  const isCategoryMode = project.budget_mode === 'category';
+  const catMap: Record<string, number> = {};
+  projectCategories.forEach((pc) => { catMap[pc.category_id] = 0; });
+  invoices.forEach((i) => {
+    const cid = (i.category_id && projectCategories.some(pc => pc.category_id === i.category_id))
+      ? i.category_id
+      : '__uncategorized';
+    catMap[cid] = (catMap[cid] ?? 0) + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates);
+  });
+  const catRows = Object.entries(catMap)
+    .map(([cid, amount]) => {
+      const catBudget = isCategoryMode
+        ? (projectCategories.find(pc => pc.category_id === cid)?.budget ?? 0)
+        : 0;
+      const catPct = cid === '__uncategorized'
+        ? 100
+        : isCategoryMode
+          ? (catBudget > 0 ? (amount / catBudget) * 100 : 0)
+          : (project.budget > 0 ? (amount / project.budget) * 100 : (totalSpent > 0 ? (amount / totalSpent) * 100 : 0));
+      return {
+        id: cid,
+        name: cid === '__uncategorized' ? 'Uncategorized' : categories.find(c => c.id === cid)?.name ?? 'Unknown',
+        amount,
+        catBudget,
+        pct: Math.min(catPct, 100),
+      };
+    })
+    .filter((c) => c.amount > 0 || c.catBudget > 0 || (c.id !== '__uncategorized' && projectCategories.some(pc => pc.category_id === c.id)))
+    .sort((a, b) => {
+      return b.pct - a.pct;
+    });
 
   const vendorSpend: Record<string, number> = {};
   invoices.forEach((i) => { const v = i.vendor_name ?? 'Unknown'; vendorSpend[v] = (vendorSpend[v] ?? 0) + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates); });
@@ -222,35 +250,45 @@ const ProjectDetail = () => {
           onSaved={fetchData}
         />
 
-        <div className={`grid gap-4 sm:grid-cols-2 ${project.budget > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-2'}`}>
-          <KpiCard title="Invoices" value={invoices.length} icon={<FileText className="h-5 w-5 text-primary" />} />
-          <KpiCard title="Total Spent" value={formatCurrency(totalSpent, baseCurrency)} icon={<DollarSign className="h-5 w-5 text-primary" />} />
-          {project.budget > 0 && <>
-            <KpiCard title="Budget" value={formatCurrency(project.budget, baseCurrency)} icon={<Target className="h-5 w-5 text-muted-foreground" />} />
-            <KpiCard title="Remaining" value={formatCurrency(remaining, baseCurrency)} icon={<AlertCircle className={`h-5 w-5 ${remaining < 0 ? 'text-primary' : 'text-muted-foreground'}`} />} />
-          </>}
+        {/* Row 1: Invoice count + Budget progress */}
+        <div className={`grid gap-6 ${project.budget > 0 ? 'grid-cols-[auto_1fr]' : ''}`}>
+          <Card className="cursor-pointer transition-shadow hover:shadow-md" onClick={() => document.getElementById('invoices-table')?.scrollIntoView({ behavior: 'smooth' })}>
+            <CardContent className="flex items-center gap-3 p-5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary">
+                <FileText className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Invoices</p>
+                <p className="text-xl font-bold">{invoices.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {project.budget > 0 && (
+            <Card>
+              <CardContent className="flex flex-col justify-center p-5">
+                <div className="flex items-baseline justify-between mb-2">
+                  <span className="text-xs text-muted-foreground">
+                    {formatCurrency(totalSpent, baseCurrency)} / {formatCurrency(project.budget, baseCurrency)} <span className="text-foreground font-medium">({Math.round(pct)}%)</span>
+                  </span>
+                  {remaining >= 0
+                    ? <span className="text-xs text-muted-foreground">{formatCurrency(remaining, baseCurrency)} remaining</span>
+                    : <span className="text-xs font-medium text-destructive">{formatCurrency(Math.abs(remaining), baseCurrency)} over budget</span>
+                  }
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className={`h-full rounded-full transition-all ${remaining < 0 ? 'bg-destructive' : 'bg-primary'}`}
+                    style={{ width: `${Math.min(pct, 100)}%` }}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {project.budget > 0 && remaining < 0 && (
-          <div className="rounded-lg border border-primary bg-primary/5 p-4 text-sm font-medium text-primary">Over budget by {formatCurrency(Math.abs(remaining), baseCurrency)}</div>
-        )}
-
-        {project.budget > 0 && <Progress value={pct} className="h-3" />}
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          {catSpend.length > 0 && (
-            <Card><CardHeader><CardTitle className="text-sm">By Category</CardTitle></CardHeader><CardContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={catSpend} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={65}>
-                    {catSpend.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => formatCurrency(v, baseCurrency)} />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent></Card>
-          )}
+        {/* Row 2: By Vendor + Monthly Spend */}
+        <div className="grid gap-6 lg:grid-cols-2">
           {vendorData.length > 0 && (
             <Card><CardHeader><CardTitle className="text-sm">By Vendor</CardTitle></CardHeader><CardContent>
               <ResponsiveContainer width="100%" height={200}>
@@ -267,6 +305,36 @@ const ProjectDetail = () => {
           )}
         </div>
 
+        {/* Row 3: By Category (two columns) */}
+        {catRows.length > 0 && (
+          <Card><CardHeader><CardTitle className="text-sm">By Category</CardTitle></CardHeader><CardContent>
+            <div className="space-y-3">
+              {catRows.map((cat) => (
+                <div key={cat.id}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-muted-foreground">{cat.name}</span>
+                    <span className="font-medium">
+                      {formatCurrency(cat.amount, baseCurrency)}
+                      {isCategoryMode && cat.catBudget > 0 && (
+                        <span className="text-muted-foreground font-normal"> / {formatCurrency(cat.catBudget, baseCurrency)}</span>
+                      )}
+                      {!isCategoryMode && project.budget > 0 && (
+                        <span className="text-muted-foreground font-normal"> / {formatCurrency(project.budget, baseCurrency)}</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full rounded-full bg-muted-foreground/40 transition-all"
+                      style={{ width: `${cat.pct}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent></Card>
+        )}
+
         {/* Sort + count */}
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">{invoices.length} invoice{invoices.length !== 1 ? 's' : ''}</p>
@@ -281,9 +349,9 @@ const ProjectDetail = () => {
         </div>
 
         {/* Invoice table */}
-        <div className="overflow-auto rounded-lg border bg-card">
+        <div id="invoices-table" className="overflow-auto rounded-lg border bg-card">
           <table className="w-full text-sm">
-            <thead><tr className="border-b bg-secondary/30 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <thead><tr className="border-b bg-card text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
               <th className="p-3">Vendor</th><th className="p-3">Date</th><th className="p-3">Due Date</th><th className="p-3">Invoice #</th>
               <th className="p-3">Total</th><th className="p-3">Category</th><th className="p-3">Status</th>
             </tr></thead>

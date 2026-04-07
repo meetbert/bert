@@ -186,7 +186,7 @@ const Dashboard = () => {
             ) : (
               <div className="overflow-auto rounded-lg border bg-card">
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b bg-secondary/30 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  <thead><tr className="border-b bg-card text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     <th className="p-3">Vendor</th><th className="p-3">Due Date</th><th className="p-3">Total</th><th className="p-3">Status</th>
                   </tr></thead>
                   <tbody>
@@ -274,7 +274,7 @@ const Dashboard = () => {
                     const catBudget = isCategoryMode
                       ? (projCats.find(pc => pc.category_id === cid)?.budget ?? 0)
                       : 0;
-                    const catPct = cid === '__uncategorized' && isCategoryMode
+                    const catPct = cid === '__uncategorized'
                       ? 100
                       : isCategoryMode
                         ? (catBudget > 0 ? (amount / catBudget) * 100 : 0)
@@ -288,9 +288,7 @@ const Dashboard = () => {
                     };
                   })
                   .sort((a, b) => {
-                    if (a.id === '__uncategorized') return 1;
-                    if (b.id === '__uncategorized') return -1;
-                    return b.amount - a.amount;
+                    return b.pct - a.pct;
                   });
 
                 return (

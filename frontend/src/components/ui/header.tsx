@@ -1,10 +1,20 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useScroll } from '@/components/ui/use-scroll';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function LandingHeader() {
   const scrolled = useScroll(10);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleAuth = (e: React.MouseEvent, path: string) => {
+    if (user) {
+      e.preventDefault();
+      navigate('/dashboard');
+    }
+  };
 
   return (
     <header
@@ -28,10 +38,10 @@ export function LandingHeader() {
 
         {/* Auth buttons */}
         <div className="flex items-center gap-2">
-          <Link to="/login" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          <Link to="/login" onClick={(e) => handleAuth(e, '/login')} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
             Log in
           </Link>
-          <Link to="/login?signup=true" className={buttonVariants({ size: 'sm' })}>
+          <Link to="/login?signup=true" onClick={(e) => handleAuth(e, '/login?signup=true')} className={buttonVariants({ size: 'sm' })}>
             Sign up
           </Link>
         </div>

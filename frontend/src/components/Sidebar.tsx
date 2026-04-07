@@ -63,11 +63,7 @@ export const Sidebar = () => {
         {/* Header */}
         <div className="p-3 border-b border-border shrink-0">
           <div className={`flex items-center rounded-md px-3 py-2 ${collapsed ? 'justify-center' : ''}`}>
-            {isDemoMode ? (
-              <button onClick={() => { stopDemo(); navigate('/'); }} className="font-extrabold text-primary text-xl tracking-[-0.04em] hover:opacity-70 transition-opacity">Bert.</button>
-            ) : (
-              <span className="font-extrabold text-primary text-xl tracking-[-0.04em]">Bert.</span>
-            )}
+            <Link to="/" onClick={isDemoMode ? () => stopDemo() : undefined} className="font-extrabold text-primary text-xl tracking-[-0.04em] hover:opacity-70 transition-opacity">Bert.</Link>
           </div>
         </div>
 

@@ -42,10 +42,10 @@ const TOUR_STEPS: TourStep[] = [
     route: '/dashboard',
   },
   {
-    target: 'project-budgets',
+    target: 'project-category-spend',
     title: 'Budget tracking',
-    description: 'Monitor how much of each project\'s budget has been used. Bert updates these figures as it assigns invoices, so you\'ll know immediately if a project is running over budget.',
-    route: '/dashboard',
+    description: 'Monitor how much of each project\'s budget has been used, broken down by category. Bert updates these figures as it assigns invoices, so you\'ll know immediately if a project is running over budget.',
+    route: '/projects/demo-proj-ocean',
   },
 ];
 

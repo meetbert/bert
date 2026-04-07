@@ -71,17 +71,24 @@ export const WalkthroughOverlay = () => {
     }
     // Update tooltip position
     if (tooltipRef.current) {
-      const spaceAbove = r.top;
-      const spaceBelow = window.innerHeight - r.bottom;
-      const placeBelow = spaceBelow > 220 || spaceAbove < 240;
-      if (placeBelow) {
-        tooltipRef.current.style.top = `${r.bottom + 16}px`;
-        tooltipRef.current.style.left = `${Math.max(16, Math.min(r.left, window.innerWidth - 380))}px`;
-        tooltipRef.current.style.transform = 'none';
+      const left = `${Math.max(16, Math.min(r.left, window.innerWidth - 380))}px`;
+      const isTall = r.height > window.innerHeight * 0.5;
+      if (isTall) {
+        // Element taller than half the viewport — place tooltip to the left of it
+        tooltipRef.current.style.top = '50%';
+        tooltipRef.current.style.left = `${Math.max(16, r.left - 376)}px`;
+        tooltipRef.current.style.transform = 'translateY(-50%)';
       } else {
-        tooltipRef.current.style.top = `${r.top - 16}px`;
-        tooltipRef.current.style.left = `${Math.max(16, Math.min(r.left, window.innerWidth - 380))}px`;
-        tooltipRef.current.style.transform = 'translateY(-100%)';
+        const spaceBelow = window.innerHeight - r.bottom;
+        if (spaceBelow > 220) {
+          tooltipRef.current.style.top = `${r.bottom + 16}px`;
+          tooltipRef.current.style.left = left;
+          tooltipRef.current.style.transform = 'none';
+        } else {
+          tooltipRef.current.style.top = `${r.top - 16}px`;
+          tooltipRef.current.style.left = left;
+          tooltipRef.current.style.transform = 'translateY(-100%)';
+        }
       }
     }
   }, []);
@@ -160,16 +167,22 @@ export const WalkthroughOverlay = () => {
   // Initial tooltip position (will be overridden by RAF)
   const tooltipStyle: React.CSSProperties = {};
   if (rect) {
-    const spaceAbove = rect.top;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const placeBelow = spaceBelow > 220 || spaceAbove < 240;
-    if (placeBelow) {
-      tooltipStyle.top = rect.bottom + 16;
-      tooltipStyle.left = Math.max(16, Math.min(rect.left, window.innerWidth - 380));
+    const left = Math.max(16, Math.min(rect.left, window.innerWidth - 380));
+    const isTall = rect.height > window.innerHeight * 0.5;
+    if (isTall) {
+      tooltipStyle.top = '50%';
+      tooltipStyle.left = Math.max(16, rect.left - 376);
+      tooltipStyle.transform = 'translateY(-50%)';
     } else {
-      tooltipStyle.top = rect.top - 16;
-      tooltipStyle.left = Math.max(16, Math.min(rect.left, window.innerWidth - 380));
-      tooltipStyle.transform = 'translateY(-100%)';
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow > 220) {
+        tooltipStyle.top = rect.bottom + 16;
+        tooltipStyle.left = left;
+      } else {
+        tooltipStyle.top = rect.top - 16;
+        tooltipStyle.left = left;
+        tooltipStyle.transform = 'translateY(-100%)';
+      }
     }
   } else {
     tooltipStyle.top = '50%';

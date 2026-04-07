@@ -307,7 +307,7 @@ const ProjectDetail = () => {
 
         {/* Row 3: By Category (two columns) */}
         {catRows.length > 0 && (
-          <Card><CardHeader><CardTitle className="text-sm">By Category</CardTitle></CardHeader><CardContent>
+          <Card data-tour="project-category-spend"><CardHeader><CardTitle className="text-sm">By Category</CardTitle></CardHeader><CardContent>
             <div className="space-y-3">
               {catRows.map((cat) => (
                 <div key={cat.id}>

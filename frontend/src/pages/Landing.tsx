@@ -72,7 +72,7 @@ const Landing = () => {
               <a href="https://calendly.com/meetbert-info/30min" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: T.red, color: '#fff', fontSize: '14px', fontWeight: 500, padding: '13px 26px', borderRadius: '8px', border: 'none', textDecoration: 'none', transition: 'opacity 140ms ease, transform 140ms ease' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '0.85'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}>
-                Book a demo
+                Get started
               </a>
             </div>
           </div>
@@ -278,7 +278,6 @@ const Landing = () => {
         <section style={{ padding: '88px 0', borderTop: `1px solid ${T.border}`, backgroundColor: T.offWhite }}>
           <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '36px' }}>
             <div>
-              <SectionLabel text="Get started" />
               <h2 style={{ fontSize: 'clamp(26px, 3.5vw, 48px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.08, color: T.dark, margin: 0 }}>
                 Discover the full scale<br />
                 <span style={{ textDecoration: 'underline', textDecorationColor: T.red, textUnderlineOffset: '5px', textDecorationThickness: '2px' }}>of Bert's capabilities.</span>
@@ -289,7 +288,7 @@ const Landing = () => {
               <a href="https://calendly.com/meetbert-info/30min" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: T.red, color: '#fff', fontSize: '14px', fontWeight: 500, padding: '12px 22px', borderRadius: '8px', border: 'none', textDecoration: 'none', transition: 'opacity 140ms ease, transform 140ms ease' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '0.85'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}>
-                Book a demo
+                Get started
               </a>
               <button onClick={handleTryDemo} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: T.dark, color: '#fff', fontSize: '14px', fontWeight: 500, padding: '12px 22px', borderRadius: '8px', border: 'none', cursor: 'pointer', boxShadow: `0 1px 3px rgba(0,0,0,0.12), 0 6px 20px rgba(0,0,0,0.08)`, transition: 'opacity 140ms ease, transform 140ms ease' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '0.82'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}

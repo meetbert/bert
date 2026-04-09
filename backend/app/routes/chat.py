@@ -39,6 +39,9 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 log = logging.getLogger(__name__)
 
 
+MAX_MESSAGE_LENGTH = 2000
+
+
 @router.post("")
 @limiter.limit("20/minute")
 async def chat(
@@ -48,6 +51,9 @@ async def chat(
     user=Depends(get_current_user),
 ):
     """Chat with Bert — text-only or with a file attachment."""
+    if len(message) > MAX_MESSAGE_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Message too long — maximum {MAX_MESSAGE_LENGTH} characters.")
+
     try:
         file_bytes = None
         filename = None

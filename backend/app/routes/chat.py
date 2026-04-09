@@ -6,6 +6,9 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+import base64
+import json
+
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -17,7 +20,21 @@ class ChatResponse:
     response: str
 
 
-limiter = Limiter(key_func=get_remote_address)
+def _user_id_from_request(request: Request) -> str:
+    """Extract user_id from the JWT for rate limiting (no signature check needed here)."""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        try:
+            payload = auth[7:].split(".")[1]
+            payload += "=" * (4 - len(payload) % 4)
+            data = json.loads(base64.b64decode(payload))
+            return data.get("sub", "anon")
+        except Exception:
+            pass
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=_user_id_from_request)
 router = APIRouter(prefix="/chat", tags=["chat"])
 log = logging.getLogger(__name__)
 

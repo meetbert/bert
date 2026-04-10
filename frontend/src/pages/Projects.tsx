@@ -44,7 +44,12 @@ const Projects = () => {
 
   const filteredProjects = (filterTab === 'all' ? projects : projects.filter((p) => p.status === filterTab))
     .slice()
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    .sort((a, b) => {
+      if (filterTab === 'all') {
+        if (a.status !== b.status) return a.status === 'Active' ? -1 : 1;
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
 
   const renderProjectCard = (p: Project) => {
     const spent = invoices.filter((i) => i.project_id === p.id).reduce((s, i) => s + convertToBase(i.total ?? 0, i.currency ?? baseCurrency, rates), 0);

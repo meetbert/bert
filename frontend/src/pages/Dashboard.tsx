@@ -51,7 +51,14 @@ const Dashboard = () => {
   };
 
   // Merge demo data when tour is active
-  const invoices = useMemo(() => isDemoMode ? [...demoInvoices, ...rawInvoices] : rawInvoices, [isDemoMode, demoInvoices, rawInvoices]);
+  const invoices = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const enrich = (inv: any) => inv.payment_status === 'unpaid' && inv.due_date && inv.due_date < today
+      ? { ...inv, payment_status: 'overdue' }
+      : inv;
+    const all = isDemoMode ? [...demoInvoices, ...rawInvoices] : rawInvoices;
+    return all.map(enrich);
+  }, [isDemoMode, demoInvoices, rawInvoices]);
   const projects = useMemo(() => isDemoMode ? [...demoProjects, ...rawProjects] : rawProjects, [isDemoMode, demoProjects, rawProjects]);
   const categories = useMemo(() => isDemoMode ? [...demoCategories, ...rawCategories] : rawCategories, [isDemoMode, demoCategories, rawCategories]);
   const projectCategories = useMemo(() => isDemoMode ? [...demoProjectCategories, ...rawProjectCategories] : rawProjectCategories, [isDemoMode, demoProjectCategories, rawProjectCategories]);
@@ -206,7 +213,7 @@ const Dashboard = () => {
                   </tbody>
                 </table>
                 <div className="border-t p-2">
-                  <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate(`/invoices?status=${kpiFilter === 'overdue' ? 'overdue' : 'unpaid'}`)}>View all →</Button>
+                  <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate(`/invoices?status=${kpiFilter === 'overdue' ? 'overdue' : 'unpaid'}&scope=all`)}>View all →</Button>
                 </div>
               </div>
             )}

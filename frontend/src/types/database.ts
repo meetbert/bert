@@ -3,7 +3,7 @@ export interface Project {
   name: string;
   budget: number;
   budget_mode: 'total' | 'category';
-  status: 'Active' | 'Completed' | 'Archived';
+  status: 'Active' | 'Completed';
   description: string | null;
   ai_context: string | null;
   known_vendors: string[];

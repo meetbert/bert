@@ -37,7 +37,10 @@ const Invoices = () => {
   const [search, setSearch] = useState('');
   const [filterProject, setFilterProject] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
-  const [filterProjectScope, setFilterProjectScope] = useState<'active' | 'all' | 'archived'>('active');
+  const [filterProjectScope, setFilterProjectScope] = useState<'active' | 'all' | 'archived'>(() => {
+    const scope = new URLSearchParams(window.location.search).get('scope');
+    return (scope === 'all' || scope === 'archived') ? scope : 'active';
+  });
   const [quickFilter, setQuickFilter] = useState<'all' | 'paid' | 'unpaid' | 'overdue'>(() => {
     const status = new URLSearchParams(window.location.search).get('status');
     if (status === 'overdue' || status === 'unpaid') return status;
@@ -49,10 +52,15 @@ const Invoices = () => {
   const { rates } = useExchangeRates(baseCurrency);
 
   useEffect(() => {
-    const status = new URLSearchParams(location.search).get('status');
+    const params = new URLSearchParams(location.search);
+    const status = params.get('status');
+    const scope = params.get('scope');
     if (status === 'overdue' || status === 'unpaid') {
       setQuickFilter(status);
       setPage(0);
+    }
+    if (scope === 'all' || scope === 'archived') {
+      setFilterProjectScope(scope);
     }
   }, [location.search]);
 
@@ -90,7 +98,14 @@ const Invoices = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const invoices = useMemo(() => isDemoMode ? [...demoInvoices, ...rawInvoices] : rawInvoices, [isDemoMode, demoInvoices, rawInvoices]);
+  const invoices = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const enrich = (inv: any) => inv.payment_status === 'unpaid' && inv.due_date && inv.due_date < today
+      ? { ...inv, payment_status: 'overdue' }
+      : inv;
+    const all = isDemoMode ? [...demoInvoices, ...rawInvoices] : rawInvoices;
+    return all.map(enrich);
+  }, [isDemoMode, demoInvoices, rawInvoices]);
   const projects = useMemo(() => isDemoMode ? [...demoProjects, ...rawProjects] : rawProjects, [isDemoMode, demoProjects, rawProjects]);
   const categories = useMemo(() => isDemoMode ? [...demoCategories, ...rawCategories] : rawCategories, [isDemoMode, demoCategories, rawCategories]);
 
@@ -135,15 +150,17 @@ const Invoices = () => {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
 
   const changeStatus = async (inv: Invoice, newStatus: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const effectiveStatus = newStatus === 'unpaid' && inv.due_date && inv.due_date < today ? 'overdue' : newStatus;
     if (isDemoMode && inv.id.startsWith('demo-')) {
-      updateDemoInvoice(inv.id, { payment_status: newStatus as any });
-      toast({ title: `Marked as ${newStatus}` });
+      updateDemoInvoice(inv.id, { payment_status: effectiveStatus as any });
+      toast({ title: `Marked as ${effectiveStatus}` });
       return;
     }
-    const { error } = await supabase.from('invoices').update({ payment_status: newStatus }).eq('id', inv.id);
+    const { error } = await supabase.from('invoices').update({ payment_status: effectiveStatus }).eq('id', inv.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    setRawInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: newStatus as any } : i));
-    toast({ title: `Marked as ${newStatus}` });
+    setRawInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: effectiveStatus as any } : i));
+    toast({ title: `Marked as ${effectiveStatus}` });
   };
 
   const assignProject = async (invoiceId: string, projectId: string) => {

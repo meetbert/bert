@@ -14,7 +14,7 @@ import { toast } from '@/hooks/use-toast';
 import { formatCurrency, convertToBase, SUPPORTED_CURRENCIES } from '@/lib/currency';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
-import { ArrowLeft, Pencil, Check, X, Download, Trash2, Clock, FileText } from 'lucide-react';
+import { ArrowLeft, Pencil, Check, X, Download, Trash2, Clock, FileText, AlertCircle } from 'lucide-react';
 import { StatusDropdown } from '@/components/StatusDropdown';
 import { useDemoData } from '@/contexts/DemoDataContext';
 
@@ -39,7 +39,11 @@ const InvoiceDetail = () => {
     if (!id) { setLoading(false); return; }
 
     if (isDemoMode && id.startsWith('demo-')) {
-      const inv = demoInvoices.find(i => i.id === id) ?? null;
+      const today = new Date().toISOString().split('T')[0];
+      const raw = demoInvoices.find(i => i.id === id) ?? null;
+      const inv = raw && raw.payment_status === 'unpaid' && raw.due_date && raw.due_date < today
+        ? { ...raw, payment_status: 'overdue' as const }
+        : raw;
       setInvoice(inv);
       setProjects(demoProjects as Project[]);
       setCategories(demoCategories);
@@ -63,10 +67,12 @@ const InvoiceDetail = () => {
         return;
       }
 
+      const today = new Date().toISOString().split('T')[0];
       const projectsMap = new Map((p.data ?? []).map((proj: any) => [proj.id, proj]));
       const categoriesMap = new Map((c.data ?? []).map((cat: any) => [cat.id, cat]));
       const enriched = inv.data ? {
         ...inv.data,
+        payment_status: inv.data.payment_status === 'unpaid' && inv.data.due_date && inv.data.due_date < today ? 'overdue' : inv.data.payment_status,
         project: inv.data.project_id ? projectsMap.get(inv.data.project_id) ?? null : null,
         category: inv.data.category_id ? categoriesMap.get(inv.data.category_id) ?? null : null,
       } : null;
@@ -136,14 +142,21 @@ const InvoiceDetail = () => {
 
   const saveEdit = async () => {
     if (!invoice) return;
+    const today = new Date().toISOString().split('T')[0];
+    const newDueDate = editData.due_date ?? invoice.due_date;
+    const currentStatus = editData.payment_status ?? invoice.payment_status;
+    const updatedData = { ...editData };
+    if (currentStatus !== 'paid' && newDueDate) {
+      updatedData.payment_status = newDueDate < today ? 'overdue' : 'unpaid';
+    }
     if (isDemoMode && invoice.id.startsWith('demo-')) {
-      updateDemoInvoice(invoice.id, editData);
-      setInvoice((prev) => prev ? { ...prev, ...editData } : prev);
+      updateDemoInvoice(invoice.id, updatedData);
+      setInvoice((prev) => prev ? { ...prev, ...updatedData } : prev);
       setEditing(false);
       toast({ title: 'Saved' });
       return;
     }
-    const { error } = await supabase.from('invoices').update(editData).eq('id', invoice.id);
+    const { error } = await supabase.from('invoices').update(updatedData).eq('id', invoice.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setEditing(false);
     fetchInvoice();
@@ -166,10 +179,12 @@ const InvoiceDetail = () => {
 
   const handleStatusChange = async (newStatus: string) => {
     if (!invoice) return;
-    const { error } = await supabase.from('invoices').update({ payment_status: newStatus }).eq('id', invoice.id);
+    const today = new Date().toISOString().split('T')[0];
+    const effectiveStatus = newStatus === 'unpaid' && invoice.due_date && invoice.due_date < today ? 'overdue' : newStatus;
+    const { error } = await supabase.from('invoices').update({ payment_status: effectiveStatus }).eq('id', invoice.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    setInvoice((prev) => prev ? { ...prev, payment_status: newStatus as any } : prev);
-    toast({ title: `Marked as ${newStatus}` });
+    setInvoice((prev) => prev ? { ...prev, payment_status: effectiveStatus as any } : prev);
+    toast({ title: `Marked as ${effectiveStatus}` });
   };
 
   const activityLog = invoice ? [
@@ -214,6 +229,11 @@ const InvoiceDetail = () => {
                 status={invoice.payment_status === 'overdue' ? 'unpaid' : invoice.payment_status}
                 onChangeStatus={handleStatusChange}
               />
+              {invoice.payment_status === 'overdue' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
+                  <AlertCircle className="h-3 w-3" /> Overdue
+                </span>
+              )}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               #{invoice.invoice_number} &middot; {invoice.invoice_date} &middot; {invoice.currency}

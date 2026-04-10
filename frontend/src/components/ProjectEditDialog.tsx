@@ -89,7 +89,7 @@ export const ProjectEditDialog = ({
   const [description, setDescription] = useState('');
   const [knownVendors, setKnownVendors] = useState('');
   const [knownLocations, setKnownLocations] = useState('');
-  const [status, setStatus] = useState<'Active' | 'Completed' | 'Archived'>(project.status as 'Active' | 'Completed' | 'Archived');
+  const [status, setStatus] = useState<'Active' | 'Completed'>(project.status as 'Active' | 'Completed');
 
   // Categories & Budgets
   const [availableCategories, setAvailableCategories] = useState<Category[]>(
@@ -114,7 +114,7 @@ export const ProjectEditDialog = ({
     setDescription(project.description ?? '');
     setKnownVendors((project.known_vendors ?? []).join(', '));
     setKnownLocations((project.known_locations ?? []).join(', '));
-    setStatus(project.status as 'Active' | 'Completed' | 'Archived');
+    setStatus(project.status as 'Active' | 'Completed');
     setDocsToDelete(new Set());
     setPendingFiles([]);
     setNewCategoryName('');
@@ -564,14 +564,13 @@ export const ProjectEditDialog = ({
                 </div>
                 <div className="space-y-2">
                   <Label>Status</Label>
-                  <Select value={status} onValueChange={(v) => setStatus(v as 'Active' | 'Completed' | 'Archived')}>
+                  <Select value={status} onValueChange={(v) => setStatus(v as 'Active' | 'Completed')}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Active">Active</SelectItem>
                       <SelectItem value="Completed">Completed</SelectItem>
-                      <SelectItem value="Archived">Archived</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

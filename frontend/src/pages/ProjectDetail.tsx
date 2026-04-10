@@ -15,9 +15,10 @@ import { toast } from '@/hooks/use-toast';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency, convertToBase } from '@/lib/currency';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
-import { FileText, AlertCircle, ArrowLeft, Pencil, Trash2, ExternalLink, ImageIcon } from 'lucide-react';
+import { FileText, AlertCircle, ArrowLeft, Pencil, Trash2, ExternalLink, ImageIcon, Plus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { ProjectEditDialog } from '@/components/ProjectEditDialog';
+import { CreateInvoiceDialog } from '@/components/CreateInvoiceDialog';
 import { useDemoData } from '@/contexts/DemoDataContext';
 
 const ProjectDetail = () => {
@@ -34,6 +35,7 @@ const ProjectDetail = () => {
   const [loading, setLoading] = useState(true);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCreateInvoice, setShowCreateInvoice] = useState(false);
 
   const [assignableCategories, setAssignableCategories] = useState<Category[]>([]);
   const [projectCategories, setProjectCategories] = useState<{ category_id: string; budget: number }[]>([]);
@@ -227,7 +229,10 @@ const ProjectDetail = () => {
               toast({ title: `Status changed to ${s}` });
             }} />
           </div>
-          <div className="flex gap-1">
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowCreateInvoice(true)} className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              <Plus className="h-4 w-4" /> New Invoice
+            </button>
             <Button variant="ghost" size="icon" onClick={() => setShowEditDialog(true)}>
               <Pencil className="h-4 w-4" />
             </Button>
@@ -248,6 +253,16 @@ const ProjectDetail = () => {
           open={showEditDialog}
           onOpenChange={setShowEditDialog}
           onSaved={fetchData}
+        />
+
+        <CreateInvoiceDialog
+          open={showCreateInvoice}
+          onClose={() => setShowCreateInvoice(false)}
+          onCreated={fetchData}
+          projects={[project]}
+          categories={assignableCategories}
+          defaultCurrency={baseCurrency}
+          defaultProjectId={id!}
         />
 
         {/* Row 1: Invoice count + Budget progress */}

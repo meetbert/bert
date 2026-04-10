@@ -19,9 +19,10 @@ interface Props {
   projects: Project[];
   categories: Category[];
   defaultCurrency?: string;
+  defaultProjectId?: string;
 }
 
-export function CreateInvoiceDialog({ open, onClose, onCreated, projects, categories, defaultCurrency = 'GBP' }: Props) {
+export function CreateInvoiceDialog({ open, onClose, onCreated, projects, categories, defaultCurrency = 'GBP', defaultProjectId = '' }: Props) {
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
 
@@ -35,7 +36,7 @@ export function CreateInvoiceDialog({ open, onClose, onCreated, projects, catego
     vat: '',
     total: '',
     description: '',
-    project_id: '',
+    project_id: defaultProjectId,
     category_id: '',
     payment_status: 'unpaid',
   });
@@ -81,7 +82,7 @@ export function CreateInvoiceDialog({ open, onClose, onCreated, projects, catego
     setForm({
       vendor_name: '', invoice_number: '', invoice_date: '', due_date: '',
       currency: defaultCurrency, subtotal: '', vat: '', total: '',
-      description: '', project_id: '', category_id: '', payment_status: 'unpaid',
+      description: '', project_id: defaultProjectId, category_id: '', payment_status: 'unpaid',
     });
     onCreated();
     onClose();

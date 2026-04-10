@@ -181,6 +181,12 @@ const InvoiceDetail = () => {
     if (!invoice) return;
     const today = new Date().toISOString().split('T')[0];
     const effectiveStatus = newStatus === 'unpaid' && invoice.due_date && invoice.due_date < today ? 'overdue' : newStatus;
+    if (isDemoMode && invoice.id.startsWith('demo-')) {
+      updateDemoInvoice(invoice.id, { payment_status: effectiveStatus as any });
+      setInvoice((prev) => prev ? { ...prev, payment_status: effectiveStatus as any } : prev);
+      toast({ title: `Marked as ${effectiveStatus}` });
+      return;
+    }
     const { error } = await supabase.from('invoices').update({ payment_status: effectiveStatus }).eq('id', invoice.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setInvoice((prev) => prev ? { ...prev, payment_status: effectiveStatus as any } : prev);

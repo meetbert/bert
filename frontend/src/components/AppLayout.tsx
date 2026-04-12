@@ -1,12 +1,14 @@
 import { Sidebar } from '@/components/Sidebar';
 import { useWalkthrough } from '@/contexts/WalkthroughContext';
 import { useUserSettings } from '@/hooks/useUserSettings';
+import { useDemoData } from '@/contexts/DemoDataContext';
 
 export const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { isActive: isTourActive } = useWalkthrough();
   const { settings, loading } = useUserSettings();
+  const { isDemoMode } = useDemoData();
 
-  const showGetStarted = !loading && !settings?.agentmail_inbox;
+  const showGetStarted = !loading && (isDemoMode || !settings?.agentmail_inbox);
 
   return (
     <div className="flex min-h-screen">

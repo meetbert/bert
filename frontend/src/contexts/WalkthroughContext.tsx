@@ -45,7 +45,7 @@ const TOUR_STEPS: TourStep[] = [
     target: 'project-category-spend',
     title: 'Budget tracking',
     description: 'Monitor how much of each project\'s budget has been used, broken down by category. Bert updates these figures as it assigns invoices, so you\'ll know immediately if a project is running over budget.',
-    route: '/projects/demo-proj-ocean',
+    route: '/projects/4b9dadaf-2bde-4115-b5af-42a3d4d1f6f8',
   },
 ];
 
@@ -74,7 +74,7 @@ export const WalkthroughProvider = ({ children }: { children: React.ReactNode })
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { isDemoMode, stopDemo } = useDemoData();
+  const { isDemoMode } = useDemoData();
 
   const step = isActive ? TOUR_STEPS[currentStep] ?? null : null;
 
@@ -82,11 +82,10 @@ export const WalkthroughProvider = ({ children }: { children: React.ReactNode })
     setIsActive(false);
     localStorage.setItem('bert_walkthrough_done', 'true');
     // If a logged-in user was viewing the tour in demo mode, exit demo and return to their dashboard
-    if (user && isDemoMode) {
-      stopDemo();
+    if (isDemoMode) {
       navigate('/dashboard', { replace: true });
     }
-  }, [user, isDemoMode, stopDemo, navigate]);
+  }, [user, isDemoMode, navigate]);
 
   const goToStep = useCallback((idx: number) => {
     if (idx < 0 || idx >= TOUR_STEPS.length) {

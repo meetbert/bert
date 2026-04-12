@@ -35,7 +35,7 @@ async function prepareFiles(rawFiles: File[]): Promise<File[]> {
 }
 import { Textarea } from '@/components/ui/textarea';
 import { Project, Category } from '@/types/database';
-import { useDemoData } from '@/contexts/DemoDataContext';
+
 import {
   Sheet,
   SheetContent,
@@ -74,7 +74,6 @@ export const ProjectEditDialog = ({
   onSaved,
 }: ProjectEditDialogProps) => {
   const { user, session } = useAuth();
-  const { isDemoMode, demoCategories, demoProjectCategories, demoProjectDocs, updateDemoProject, addDemoCategory } = useDemoData();
   const { baseCurrency } = useUserSettings();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -118,20 +117,6 @@ export const ProjectEditDialog = ({
     setDocsToDelete(new Set());
     setPendingFiles([]);
     setNewCategoryName('');
-
-    if (isDemoMode && project.id.startsWith('demo-')) {
-      setAvailableCategories([...demoCategories].sort((a, b) => a.name.localeCompare(b.name)));
-      const projDocs = demoProjectDocs.filter(d => d.project_id === project.id);
-      setExistingDocs(projDocs.map(d => ({ id: d.id, file_name: d.file_name, storage_path: d.signedUrl })));
-      const projCats = demoProjectCategories.filter(pc => pc.project_id === project.id);
-      const selected = new Map<string, number>();
-      projCats.forEach(pc => selected.set(pc.category_id, pc.budget ?? 0));
-      setSelectedCategories(selected);
-      const mode = project.budget_mode ?? 'total';
-      setBudgetMode(mode);
-      setManualBudget(mode === 'total' ? (project.budget > 0 ? String(project.budget) : '') : '');
-      return;
-    }
 
     Promise.all([
       supabase.from('invoice_categories').select('*').order('name'),
@@ -186,14 +171,6 @@ export const ProjectEditDialog = ({
   const addCustomCategory = async () => {
     const trimmed = newCategoryName.trim();
     if (!trimmed) return;
-
-    if (isDemoMode) {
-      const cat = addDemoCategory(trimmed);
-      setAvailableCategories(prev => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
-      setSelectedCategories(prev => { const next = new Map(prev); next.set(cat.id, 0); return next; });
-      setNewCategoryName('');
-      return;
-    }
 
     const { data, error } = await supabase
       .from('invoice_categories')
@@ -321,24 +298,6 @@ export const ProjectEditDialog = ({
     setSubmitting(true);
 
     const parseList = (text: string) => text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-
-    if (isDemoMode && project.id.startsWith('demo-')) {
-      const budgetToSave = budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget;
-      updateDemoProject(project.id, {
-        name: name.trim(),
-        description: description.trim() || null,
-        status,
-        budget: budgetToSave,
-        budget_mode: budgetMode,
-        known_vendors: parseList(knownVendors),
-        known_locations: parseList(knownLocations),
-      });
-      toast({ title: 'Project updated' });
-      onOpenChange(false);
-      onSaved();
-      setSubmitting(false);
-      return;
-    }
 
     if (!user) { setSubmitting(false); return; }
 

@@ -35,14 +35,14 @@ async function prepareFiles(rawFiles: File[]): Promise<File[]> {
 }
 import { Textarea } from '@/components/ui/textarea';
 import { Category } from '@/types/database';
-import { useDemoData } from '@/contexts/DemoDataContext';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
-import { Plus, FileText, X, Upload, Loader2, ArrowLeft, ArrowRight, Info } from 'lucide-react';
+import { Plus, FileText, X, Upload, Loader2, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency } from '@/lib/currency';
 
@@ -58,7 +58,6 @@ export const ProjectCreationWizard = ({
   showProgress = true,
 }: WizardProps) => {
   const { user, session } = useAuth();
-  const { isDemoMode, demoCategories, addDemoProject, addDemoProjectCategories, addDemoCategory, addDemoProjectDocs } = useDemoData();
   const { baseCurrency } = useUserSettings();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -67,7 +66,6 @@ export const ProjectCreationWizard = ({
   const [extracting, setExtracting] = useState(false);
   const [converting, setConverting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [demoExtracted, setDemoExtracted] = useState(false);
 
   // Step 1 — Brief + Project Details
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -86,42 +84,19 @@ export const ProjectCreationWizard = ({
   const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
 
   useEffect(() => {
-    if (isDemoMode) {
-      setAvailableCategories([...demoCategories].sort((a, b) => a.name.localeCompare(b.name)));
-      return;
-    }
     supabase
       .from('invoice_categories')
       .select('*')
       .order('name')
       .then(({ data }) => setAvailableCategories(data ?? []));
-  }, [isDemoMode]);
+  }, []);
 
   const totalBudget = Array.from(selectedCategories.values()).reduce((sum, b) => sum + b, 0);
 
   // ── Brief extraction ──────────────────────────────────────────────
 
-  const DEMO_BRIEF = {
-    name: 'Coastal Horizons Documentary',
-    description: 'A feature-length documentary following fishing communities along the Atlantic coast, exploring the intersection of tradition and climate change. Principal photography across three locations over six weeks.',
-    known_vendors: 'Lens & Light Equipment Co, Northern Drone Services, Pinewood Catering Ltd, Studio X Post Production',
-    known_locations: 'Porto, Lisbon, Galicia',
-  };
-
   const extractFromFile = async (file: File) => {
     setExtracting(true);
-
-    if (isDemoMode) {
-      await new Promise(r => setTimeout(r, 2000));
-      if (!name.trim()) setName(DEMO_BRIEF.name);
-      setDescription(prev => prev.trim() ? prev : DEMO_BRIEF.description);
-      setKnownVendors(DEMO_BRIEF.known_vendors);
-      setKnownLocations(DEMO_BRIEF.known_locations);
-      toast({ title: 'Brief extracted', description: 'Project details filled in below — review and edit as needed.' });
-      setDemoExtracted(true);
-      setExtracting(false);
-      return;
-    }
 
     try {
       const form = new FormData();
@@ -202,14 +177,6 @@ export const ProjectCreationWizard = ({
     const trimmed = newCategoryName.trim();
     if (!trimmed) return;
 
-    if (isDemoMode) {
-      const cat = addDemoCategory(trimmed);
-      setAvailableCategories(prev => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
-      setSelectedCategories(prev => { const next = new Map(prev); next.set(cat.id, 0); return next; });
-      setNewCategoryName('');
-      return;
-    }
-
     const { data, error } = await supabase
       .from('invoice_categories')
       .insert({ name: trimmed })
@@ -252,39 +219,6 @@ export const ProjectCreationWizard = ({
 
   const handleCreateProject = async () => {
     setSubmitting(true);
-
-    if (isDemoMode) {
-      const parseList = (text: string) => text.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
-      const newId = `demo-proj-${Date.now()}`;
-      addDemoProject({
-        id: newId,
-        name: name.trim(),
-        description: description.trim() || null,
-        status: 'Active',
-        budget: budgetMode === 'total' ? (parseFloat(manualBudget) || 0) : totalBudget,
-        budget_mode: budgetMode,
-        known_vendors: parseList(knownVendors),
-        known_locations: parseList(knownLocations),
-        ai_context: null,
-        created_at: new Date().toISOString().split('T')[0],
-      });
-      if (selectedCategories.size > 0) {
-        addDemoProjectCategories(
-          Array.from(selectedCategories.entries()).map(([categoryId, budget]) => ({
-            project_id: newId,
-            category_id: categoryId,
-            budget,
-          }))
-        );
-      }
-      if (pendingFiles.length > 0) {
-        await addDemoProjectDocs(newId, pendingFiles);
-      }
-      toast({ title: 'Project created', description: `"${name}" is ready.` });
-      setSubmitting(false);
-      onComplete(newId);
-      return;
-    }
 
     if (!user) { setSubmitting(false); return; }
 
@@ -454,16 +388,7 @@ export const ProjectCreationWizard = ({
             <p className="text-xs text-muted-foreground">Add nearby towns, villages, and venues — not just the main location. Receipts from local restaurants, shops, and suppliers will be matched against these.</p>
           </div>
 
-          {isDemoMode ? (
-            demoExtracted && (
-              <div className="flex items-start gap-2 rounded-md border bg-muted/60 px-3 py-2.5">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">These are sample details filled in for the demo. In your live account, Bert reads your actual brief and extracts the details accurately.</p>
-              </div>
-            )
-          ) : (
-            <p className="text-xs text-muted-foreground">The description, vendors, and locations above are all seen by the AI when assigning invoices and answering questions about this project.</p>
-          )}
+          <p className="text-xs text-muted-foreground">The description, vendors, and locations above are all seen by the AI when assigning invoices and answering questions about this project.</p>
 
           <div className="flex justify-end gap-2 pt-2">
             {onCancel && (

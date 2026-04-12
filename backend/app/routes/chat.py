@@ -16,10 +16,6 @@ from app.deps import get_current_user
 from app.agents.bert_chat import preprocess_chat, process_chat
 
 
-class ChatResponse:
-    response: str
-
-
 def _user_id_from_request(request: Request) -> str:
     """Extract user_id from the JWT for rate limiting (no signature check needed here)."""
     auth = request.headers.get("Authorization", "")

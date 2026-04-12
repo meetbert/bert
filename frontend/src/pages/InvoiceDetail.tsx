@@ -16,7 +16,6 @@ import { useUserSettings } from '@/hooks/useUserSettings';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { ArrowLeft, Pencil, Check, X, Download, Trash2, Clock, FileText, AlertCircle } from 'lucide-react';
 import { StatusDropdown } from '@/components/StatusDropdown';
-import { useDemoData } from '@/contexts/DemoDataContext';
 
 const InvoiceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -33,27 +32,10 @@ const InvoiceDetail = () => {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const { baseCurrency } = useUserSettings();
   const { rates } = useExchangeRates(baseCurrency);
-  const { isDemoMode, demoInvoices, demoProjects, demoCategories, updateDemoInvoice, deleteDemoInvoice } = useDemoData();
 
   const fetchInvoice = async () => {
     if (!id) { setLoading(false); return; }
 
-    if (isDemoMode && id.startsWith('demo-')) {
-      const today = new Date().toISOString().split('T')[0];
-      const raw = demoInvoices.find(i => i.id === id) ?? null;
-      const inv = raw && raw.payment_status === 'unpaid' && raw.due_date && raw.due_date < today
-        ? { ...raw, payment_status: 'overdue' as const }
-        : raw;
-      setInvoice(inv);
-      setProjects(demoProjects as Project[]);
-      setCategories(demoCategories);
-      if (inv?.document_path?.startsWith('blob:')) {
-        setDocumentUrl(inv.document_path);
-        setDownloadUrl(inv.document_path);
-      }
-      setLoading(false);
-      return;
-    }
     try {
       const [inv, p, c] = await Promise.all([
         supabase.from('invoices').select('*').eq('id', id).single(),
@@ -149,13 +131,6 @@ const InvoiceDetail = () => {
     if (currentStatus !== 'paid' && newDueDate) {
       updatedData.payment_status = newDueDate < today ? 'overdue' : 'unpaid';
     }
-    if (isDemoMode && invoice.id.startsWith('demo-')) {
-      updateDemoInvoice(invoice.id, updatedData);
-      setInvoice((prev) => prev ? { ...prev, ...updatedData } : prev);
-      setEditing(false);
-      toast({ title: 'Saved' });
-      return;
-    }
     const { error } = await supabase.from('invoices').update(updatedData).eq('id', invoice.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setEditing(false);
@@ -165,12 +140,6 @@ const InvoiceDetail = () => {
 
   const handleDelete = async () => {
     if (!invoice) return;
-    if (isDemoMode && invoice.id.startsWith('demo-')) {
-      deleteDemoInvoice(invoice.id);
-      toast({ title: 'Invoice deleted' });
-      navigate('/invoices');
-      return;
-    }
     const { error } = await supabase.from('invoices').delete().eq('id', invoice.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     toast({ title: 'Invoice deleted' });
@@ -181,12 +150,6 @@ const InvoiceDetail = () => {
     if (!invoice) return;
     const today = new Date().toISOString().split('T')[0];
     const effectiveStatus = newStatus === 'unpaid' && invoice.due_date && invoice.due_date < today ? 'overdue' : newStatus;
-    if (isDemoMode && invoice.id.startsWith('demo-')) {
-      updateDemoInvoice(invoice.id, { payment_status: effectiveStatus as any });
-      setInvoice((prev) => prev ? { ...prev, payment_status: effectiveStatus as any } : prev);
-      toast({ title: `Marked as ${effectiveStatus}` });
-      return;
-    }
     const { error } = await supabase.from('invoices').update({ payment_status: effectiveStatus }).eq('id', invoice.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setInvoice((prev) => prev ? { ...prev, payment_status: effectiveStatus as any } : prev);

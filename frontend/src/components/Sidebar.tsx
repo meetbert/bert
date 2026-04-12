@@ -20,7 +20,7 @@ export const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === 'true');
   const [popoverOpen, setPopoverOpen] = useState(false);
   const { user, signOut } = useAuth();
-  const { isDemoMode, stopDemo } = useDemoData();
+  const { isDemoMode } = useDemoData();
   const { isActive: isTourActive } = useWalkthrough();
   const location = useLocation();
   const navigate = useNavigate();
@@ -52,7 +52,7 @@ export const Sidebar = () => {
   const email = isDemoMode ? '' : (user?.email ?? '');
 
   const handleSignOut = async () => {
-    if (isDemoMode) { stopDemo(); navigate('/'); return; }
+    if (isDemoMode) { navigate('/'); return; }
     await signOut();
     navigate('/login');
   };
@@ -65,7 +65,7 @@ export const Sidebar = () => {
         {/* Header */}
         <div className="p-3 border-b border-border shrink-0">
           <div className={`flex items-center rounded-md px-3 py-2 ${isCollapsed ? 'justify-center' : ''}`}>
-            <Link to="/" onClick={isDemoMode ? () => stopDemo() : undefined} className="font-extrabold text-primary text-xl tracking-[-0.04em] hover:opacity-70 transition-opacity">Bert.</Link>
+            <Link to="/" className="font-extrabold text-primary text-xl tracking-[-0.04em] hover:opacity-70 transition-opacity">Bert.</Link>
           </div>
         </div>
 

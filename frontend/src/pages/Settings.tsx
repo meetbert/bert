@@ -20,7 +20,7 @@ const Settings = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { start: startWalkthrough } = useWalkthrough();
-  const { isDemoMode, startDemo, stopDemo, demoCurrency, setDemoCurrency } = useDemoData();
+  const { isDemoMode, startDemo } = useDemoData();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -29,8 +29,7 @@ const Settings = () => {
   // Meetbert.uk inbox (read-only — assigned manually by admin)
   const [inboxAddress, setInboxAddress] = useState<string | null>(null);
 
-  // Currency — in demo mode, driven by DemoDataContext
-  const [baseCurrency, setBaseCurrency] = useState(() => isDemoMode ? demoCurrency : 'EUR');
+  const [baseCurrency, setBaseCurrency] = useState('EUR');
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
@@ -81,7 +80,7 @@ const Settings = () => {
           <CardContent className="space-y-3">
             {inboxAddress ? (
               <>
-                <div className="flex items-center gap-2 rounded-lg border bg-secondary/30 px-3 py-2">
+                <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2">
                   <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span className="flex-1 font-mono text-sm">{inboxAddress}</span>
                   <button onClick={copyInbox} className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground" title="Copy">
@@ -105,7 +104,6 @@ const Settings = () => {
             <p className="text-xs text-muted-foreground">All dashboard totals and KPIs will display in this currency.</p>
             <Select value={baseCurrency} onValueChange={async (v) => {
               setBaseCurrency(v);
-              if (isDemoMode) { setDemoCurrency(v); return; }
               if (!user) return;
               const { error } = await supabase.from('user_settings').upsert({ id: user.id, base_currency: v });
               if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -205,7 +203,7 @@ const Settings = () => {
             <CardHeader><CardTitle className="text-sm">Demo Mode</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <p className="text-xs text-muted-foreground">You're exploring Bert with sample data. Nothing you do here affects anyone else.</p>
-              <Button variant="outline" size="sm" onClick={() => { stopDemo(); navigate('/'); }}>
+              <Button variant="outline" size="sm" onClick={() => navigate('/')}>
                 <LogOut className="mr-1 h-4 w-4" /> Exit demo
               </Button>
             </CardContent>

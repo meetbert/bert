@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Project } from '@/types/database';
@@ -14,14 +14,12 @@ import { useUserSettings } from '@/hooks/useUserSettings';
 import { formatCurrency, convertToBase } from '@/lib/currency';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { ProjectCreationWizard } from '@/components/ProjectCreationWizard';
-import { useDemoData } from '@/contexts/DemoDataContext';
 
 const Projects = () => {
   const [rawProjects, setRawProjects] = useState<Project[]>([]);
   const [rawInvoices, setRawInvoices] = useState<{ id: string; total: number; currency: string | null; project_id: string | null }[]>([]);
   const { baseCurrency } = useUserSettings();
   const { rates } = useExchangeRates(baseCurrency);
-  const { isDemoMode, demoProjects, demoInvoices } = useDemoData();
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [filterTab, setFilterTab] = useState<'all' | 'Active' | 'Completed'>('all');
@@ -38,8 +36,8 @@ const Projects = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  const projects = useMemo(() => isDemoMode ? [...demoProjects, ...rawProjects] : rawProjects, [isDemoMode, demoProjects, rawProjects]);
-  const invoices = useMemo(() => isDemoMode ? [...demoInvoices.map(d => ({ id: d.id, total: d.total ?? 0, currency: d.currency, project_id: d.project_id })), ...rawInvoices] : rawInvoices, [isDemoMode, demoInvoices, rawInvoices]);
+  const projects = rawProjects;
+  const invoices = rawInvoices;
 
 
   const filteredProjects = (filterTab === 'all' ? projects : projects.filter((p) => p.status === filterTab))

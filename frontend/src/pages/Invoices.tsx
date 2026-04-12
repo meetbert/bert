@@ -18,7 +18,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { formatCurrency, convertToBase } from '@/lib/currency';
-import { useDemoData } from '@/contexts/DemoDataContext';
 
 const PAGE_SIZE = 25;
 
@@ -32,7 +31,6 @@ const Invoices = () => {
   const [rawProjects, setRawProjects] = useState<Project[]>([]);
   const [rawCategories, setRawCategories] = useState<Category[]>([]);
   const [projectCategories, setProjectCategories] = useState<{ project_id: string; category_id: string }[]>([]);
-  const { isDemoMode, demoInvoices, demoProjects, demoCategories, updateDemoInvoice } = useDemoData();
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterProject, setFilterProject] = useState('all');
@@ -103,11 +101,10 @@ const Invoices = () => {
     const enrich = (inv: any) => inv.payment_status === 'unpaid' && inv.due_date && inv.due_date < today
       ? { ...inv, payment_status: 'overdue' }
       : inv;
-    const all = isDemoMode ? [...demoInvoices, ...rawInvoices] : rawInvoices;
-    return all.map(enrich);
-  }, [isDemoMode, demoInvoices, rawInvoices]);
-  const projects = useMemo(() => isDemoMode ? [...demoProjects, ...rawProjects] : rawProjects, [isDemoMode, demoProjects, rawProjects]);
-  const categories = useMemo(() => isDemoMode ? [...demoCategories, ...rawCategories] : rawCategories, [isDemoMode, demoCategories, rawCategories]);
+    return rawInvoices.map(enrich);
+  }, [rawInvoices]);
+  const projects = rawProjects;
+  const categories = rawCategories;
 
   
   const archivedProjects = useMemo(() => projects.filter(p => p.status === 'Completed'), [projects]);
@@ -152,11 +149,6 @@ const Invoices = () => {
   const changeStatus = async (inv: Invoice, newStatus: string) => {
     const today = new Date().toISOString().split('T')[0];
     const effectiveStatus = newStatus === 'unpaid' && inv.due_date && inv.due_date < today ? 'overdue' : newStatus;
-    if (isDemoMode && inv.id.startsWith('demo-')) {
-      updateDemoInvoice(inv.id, { payment_status: effectiveStatus as any });
-      toast({ title: `Marked as ${effectiveStatus}` });
-      return;
-    }
     const { error } = await supabase.from('invoices').update({ payment_status: effectiveStatus }).eq('id', inv.id);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setRawInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, payment_status: effectiveStatus as any } : i));
@@ -165,11 +157,6 @@ const Invoices = () => {
 
   const assignProject = async (invoiceId: string, projectId: string) => {
     const proj = projects.find(p => p.id === projectId);
-    if (isDemoMode && invoiceId.startsWith('demo-')) {
-      updateDemoInvoice(invoiceId, { project_id: projectId, project: proj ?? null } as any);
-      toast({ title: 'Project assigned' });
-      return;
-    }
     const { error } = await supabase.from('invoices').update({ project_id: projectId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     const inv = rawInvoices.find(i => i.id === invoiceId);
@@ -186,11 +173,6 @@ const Invoices = () => {
 
   const assignCategory = async (invoiceId: string, categoryId: string) => {
     const cat = categories.find(c => c.id === categoryId);
-    if (isDemoMode && invoiceId.startsWith('demo-')) {
-      updateDemoInvoice(invoiceId, { category_id: categoryId, category: cat ?? null } as any);
-      toast({ title: 'Category assigned' });
-      return;
-    }
     const { error } = await supabase.from('invoices').update({ category_id: categoryId }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     const inv = rawInvoices.find(i => i.id === invoiceId);
@@ -205,11 +187,6 @@ const Invoices = () => {
   };
 
   const unassignCategory = async (invoiceId: string) => {
-    if (isDemoMode && invoiceId.startsWith('demo-')) {
-      updateDemoInvoice(invoiceId, { category_id: null, category: null } as any);
-      toast({ title: 'Category removed' });
-      return;
-    }
     const { error } = await supabase.from('invoices').update({ category_id: null }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, category_id: null, category: null } as any : i));
@@ -217,11 +194,6 @@ const Invoices = () => {
   };
 
   const unassignProject = async (invoiceId: string) => {
-    if (isDemoMode && invoiceId.startsWith('demo-')) {
-      updateDemoInvoice(invoiceId, { project_id: null, project: null } as any);
-      toast({ title: 'Project removed' });
-      return;
-    }
     const { error } = await supabase.from('invoices').update({ project_id: null }).eq('id', invoiceId);
     if (error) return toast({ title: 'Error', description: error.message, variant: 'destructive' });
     setRawInvoices((prev) => prev.map((i) => i.id === invoiceId ? { ...i, project_id: null, project: null } as any : i));

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useDemoData } from '@/contexts/DemoDataContext';
 import { useWalkthrough } from '@/contexts/WalkthroughContext';
@@ -28,11 +29,16 @@ const SectionLabel = ({ text, onDark = false }: { text: string; onDark?: boolean
 );
 
 const Landing = () => {
-  const { startDemo } = useDemoData();
+  const { isDemoMode, startDemo, stopDemo } = useDemoData();
   const { start: startTour } = useWalkthrough();
 
-  const handleTryDemo = () => {
-    startDemo();
+  // Sign out demo user when they return to the landing page
+  useEffect(() => {
+    if (isDemoMode) stopDemo();
+  }, []);
+
+  const handleTryDemo = async () => {
+    await startDemo();
     startTour();
   };
 

@@ -60,7 +60,7 @@ export const Sidebar = () => {
   return (
     <>
       <aside
-        className={`fixed top-0 left-0 h-screen bg-card border-r border-border flex flex-col z-40 ${isTourActive ? '' : 'transition-all duration-300'} ${isCollapsed ? 'w-16' : 'w-[220px]'}`}
+        className={`fixed top-0 left-0 h-screen bg-card border-r border-border flex flex-col z-40 overflow-hidden ${isTourActive ? '' : 'transition-all duration-300'} ${isCollapsed ? 'w-16' : 'w-[220px]'}`}
       >
         {/* Header */}
         <div className="p-3 border-b border-border shrink-0">
@@ -89,7 +89,7 @@ export const Sidebar = () => {
                     <div className="w-5 h-5 flex items-center justify-center shrink-0">
                       <Icon size={20} strokeWidth={2} />
                     </div>
-                    {!isCollapsed && <span className="ml-3">{label}</span>}
+                    <span className={`ml-3 whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100 delay-200'}`}>{label}</span>
                   </Link>
                 </li>
               );
@@ -107,12 +107,10 @@ export const Sidebar = () => {
                 <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold text-primary">
                   {initials}
                 </div>
-                {!isCollapsed && (
-                  <div className="min-w-0 flex-1 text-left">
-                    <p className="text-sm font-medium truncate leading-tight">{displayName}</p>
-                    {displayName !== email && <p className="text-xs text-muted-foreground truncate">{email}</p>}
-                  </div>
-                )}
+                <div className={`min-w-0 flex-1 text-left whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100 delay-200'}`}>
+                  <p className="text-sm font-medium truncate leading-tight">{displayName}</p>
+                  {displayName !== email && <p className="text-xs text-muted-foreground truncate">{email}</p>}
+                </div>
               </button>
             </PopoverTrigger>
             <PopoverContent side={isCollapsed ? 'right' : 'top'} align={isCollapsed ? 'end' : 'start'} className="p-1" style={collapsed ? { width: '12rem' } : { width: 'var(--radix-popper-anchor-width)' }}>

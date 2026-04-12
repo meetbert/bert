@@ -30,8 +30,12 @@ export const AppLayout = ({ children }: { children: React.ReactNode }) => {
           href="https://calendly.com/meetbert-info/30min"
           target="_blank"
           rel="noopener noreferrer"
-          className={`fixed left-1/2 z-50 -translate-x-1/2 inline-flex items-center rounded-xl border border-border bg-primary px-8 py-3 text-sm font-medium text-primary-foreground shadow-[0_2px_20px_rgba(0,0,0,0.10)] transition-all duration-500 ease-out hover:bg-primary/90 ${
-            isTourActive ? 'bottom-0 translate-y-full opacity-0' : 'bottom-4 translate-y-0 opacity-100'
+          style={{
+            left: 'calc(var(--sidebar-width) + (100% - var(--sidebar-width)) / 2)',
+            transition: isTourActive ? 'bottom 500ms ease-out, opacity 500ms ease-out, transform 500ms ease-out' : 'left 300ms ease-in-out, bottom 500ms ease-out, opacity 500ms ease-out, transform 500ms ease-out',
+          }}
+          className={`fixed z-50 -translate-x-1/2 inline-flex items-center rounded-xl border border-border bg-primary px-8 py-3 text-sm font-medium text-primary-foreground shadow-[0_2px_20px_rgba(0,0,0,0.10)] hover:bg-primary/90 ${
+            isTourActive ? 'bottom-0 translate-y-full opacity-0' : 'bottom-6 translate-y-0 opacity-100'
           }`}
         >
           Get started

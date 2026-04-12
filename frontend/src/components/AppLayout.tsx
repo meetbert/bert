@@ -1,10 +1,12 @@
 import { Sidebar } from '@/components/Sidebar';
 import { useWalkthrough } from '@/contexts/WalkthroughContext';
-import { useDemoData } from '@/contexts/DemoDataContext';
+import { useUserSettings } from '@/hooks/useUserSettings';
 
 export const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { isActive: isTourActive } = useWalkthrough();
-  const { isDemoMode } = useDemoData();
+  const { settings, loading } = useUserSettings();
+
+  const showGetStarted = !loading && !settings?.agentmail_inbox;
 
   return (
     <div className="flex min-h-screen">
@@ -23,7 +25,7 @@ export const AppLayout = ({ children }: { children: React.ReactNode }) => {
         {children}
       </main>
 
-      {isDemoMode && (
+      {showGetStarted && (
         <a
           href="https://calendly.com/meetbert-info/30min"
           target="_blank"

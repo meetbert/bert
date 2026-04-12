@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDemoData } from '@/contexts/DemoDataContext';
+import { supabase } from '@/lib/supabase';
 
 export interface TourStep {
   target: string;       // data-tour attribute value
@@ -10,7 +11,7 @@ export interface TourStep {
   route: string;
 }
 
-const TOUR_STEPS: TourStep[] = [
+const STATIC_STEPS: TourStep[] = [
   {
     target: 'tour-intro',
     title: 'How Bert works for you',
@@ -41,13 +42,13 @@ const TOUR_STEPS: TourStep[] = [
     description: 'Track your spending across all your productions. Bert keeps this updated automatically as invoices are processed. Use the dropdown to switch between 3, 6, or 12 month views.',
     route: '/dashboard',
   },
-  {
-    target: 'project-category-spend',
-    title: 'Budget tracking',
-    description: 'Monitor how much of each project\'s budget has been used, broken down by category. Bert updates these figures as it assigns invoices, so you\'ll know immediately if a project is running over budget.',
-    route: '/projects/4b9dadaf-2bde-4115-b5af-42a3d4d1f6f8',
-  },
 ];
+
+const BUDGET_STEP: Omit<TourStep, 'route'> = {
+  target: 'project-category-spend',
+  title: 'Budget tracking',
+  description: 'Monitor how much of each project\'s budget has been used, broken down by category. Bert updates these figures as it assigns invoices, so you\'ll know immediately if a project is running over budget.',
+};
 
 interface WalkthroughContextType {
   isActive: boolean;
@@ -71,33 +72,50 @@ export const useWalkthrough = () => {
 export const WalkthroughProvider = ({ children }: { children: React.ReactNode }) => {
   const [isActive, setIsActive] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [firstProjectId, setFirstProjectId] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
   const { isDemoMode } = useDemoData();
 
-  const step = isActive ? TOUR_STEPS[currentStep] ?? null : null;
+  // Fetch first project for the budget step
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('projects')
+      .select('id')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        setFirstProjectId(data?.[0]?.id ?? null);
+      });
+  }, [user]);
+
+  const tourSteps: TourStep[] = firstProjectId
+    ? [...STATIC_STEPS, { ...BUDGET_STEP, route: `/projects/${firstProjectId}` }]
+    : STATIC_STEPS;
+
+  const step = isActive ? tourSteps[currentStep] ?? null : null;
 
   const endTour = useCallback(() => {
     setIsActive(false);
     localStorage.setItem('bert_walkthrough_done', 'true');
-    // If a logged-in user was viewing the tour in demo mode, exit demo and return to their dashboard
     if (isDemoMode) {
       navigate('/dashboard', { replace: true });
     }
-  }, [user, isDemoMode, navigate]);
+  }, [isDemoMode, navigate]);
 
   const goToStep = useCallback((idx: number) => {
-    if (idx < 0 || idx >= TOUR_STEPS.length) {
+    if (idx < 0 || idx >= tourSteps.length) {
       endTour();
       return;
     }
     setCurrentStep(idx);
-    const target = TOUR_STEPS[idx];
+    const target = tourSteps[idx];
     if (target && location.pathname !== target.route) {
       navigate(target.route);
     }
-  }, [navigate, location.pathname, endTour]);
+  }, [navigate, location.pathname, endTour, tourSteps]);
 
   const next = useCallback(() => goToStep(currentStep + 1), [currentStep, goToStep]);
   const prev = useCallback(() => goToStep(currentStep - 1), [currentStep, goToStep]);
@@ -106,14 +124,14 @@ export const WalkthroughProvider = ({ children }: { children: React.ReactNode })
   const start = useCallback(() => {
     setCurrentStep(0);
     setIsActive(true);
-    const firstStep = TOUR_STEPS[0];
+    const firstStep = tourSteps[0];
     if (firstStep && location.pathname !== firstStep.route) {
       navigate(firstStep.route);
     }
-  }, [navigate, location.pathname]);
+  }, [navigate, location.pathname, tourSteps]);
 
   return (
-    <WalkthroughContext.Provider value={{ isActive, currentStep, totalSteps: TOUR_STEPS.length, step, next, prev, skip, start }}>
+    <WalkthroughContext.Provider value={{ isActive, currentStep, totalSteps: tourSteps.length, step, next, prev, skip, start }}>
       {children}
     </WalkthroughContext.Provider>
   );

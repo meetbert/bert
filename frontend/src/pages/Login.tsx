@@ -73,7 +73,7 @@ const Login = () => {
   };
 
   const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/dashboard` } });
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
   };
 
